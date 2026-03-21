@@ -55,9 +55,7 @@ function clearTreeFromUrl() {
   window.history.pushState({}, "", url);
 }
 
-// ════════════════════════════════════════════════════════════════
-// PANTALLA INICIO
-// ════════════════════════════════════════════════════════════════
+// ── Pantalla Inicio ───────────────────────────────────────────────────────────
 function HomeScreen({ onOpen, onCreate }) {
   const [recent, setRecent] = useState(getRecentTrees());
   const [joinId, setJoinId] = useState("");
@@ -132,15 +130,12 @@ function HomeScreen({ onOpen, onCreate }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// APP PRINCIPAL
-// ════════════════════════════════════════════════════════════════
+// ── App Principal ─────────────────────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState("loading");
   const [members, setMembers] = useState([]);
   const [connections, setConnections] = useState([]);
   const [treeId, setTreeId] = useState(null);
-  const [treeName, setTreeName] = useState("Mi Familia");
   const [exporting, setExporting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -151,32 +146,37 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState(null);
   const [playing, setPlaying] = useState(false);
-
-  // ── Zoom / Pan state ──────────────────────────────────────────
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x:0, y:0 });
-
-  // Refs para gestos
-  const canvasRef = useRef(null);
-  const audioRef = useRef(null);
-  const updatePhotoId = useRef(null);
-  const updatePhotoRef = useRef(null);
-  const draggingRef = useRef(null);
-  const dragOffRef = useRef({ x:0, y:0 });
-  const isPanningRef = useRef(false);
-  const panStartRef = useRef({ x:0, y:0 });
-  const zoomRef = useRef(1);
-  const panRef = useRef({ x:0, y:0 });
-
-  // Touch refs para pinch
-  const lastTouchDistRef = useRef(null);
-  const lastTouchMidRef = useRef(null);
-  const touchPanningRef = useRef(false);
-  const touchPanStartRef = useRef({ x:0, y:0 });
-
   const [form, setForm] = useState({ name:"", role:"Padre/Madre", photo:null, year:"" });
 
-  // Sync refs con state
+  // ── Refs para evitar stale closures ───────────────────────────
+  const treeIdRef      = useRef(null);
+  const connTypeRef    = useRef("padre-hijo");
+  const connectFirstRef = useRef(null);
+  const connectModeRef = useRef(false);
+  const membersRef     = useRef([]);
+  const zoomRef        = useRef(1);
+  const panRef         = useRef({ x:0, y:0 });
+  const draggingRef    = useRef(null);
+  const dragOffRef     = useRef({ x:0, y:0 });
+  const isPanningRef   = useRef(false);
+  const panStartRef    = useRef({ x:0, y:0 });
+  const lastTouchDistRef = useRef(null);
+  const lastTouchMidRef  = useRef(null);
+  const touchPanningRef  = useRef(false);
+  const touchPanStartRef = useRef({ x:0, y:0 });
+  const canvasRef      = useRef(null);
+  const audioRef       = useRef(null);
+  const updatePhotoId  = useRef(null);
+  const updatePhotoRef = useRef(null);
+
+  // Sincronizar refs con state
+  useEffect(() => { treeIdRef.current = treeId; }, [treeId]);
+  useEffect(() => { connTypeRef.current = connType; }, [connType]);
+  useEffect(() => { connectFirstRef.current = connectFirst; }, [connectFirst]);
+  useEffect(() => { connectModeRef.current = connectMode; }, [connectMode]);
+  useEffect(() => { membersRef.current = members; }, [members]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { panRef.current = pan; }, [pan]);
 
@@ -196,8 +196,9 @@ export default function App() {
     if (!tree) { setScreen("home"); return; }
     const { data: m } = await supabase.from("members").select("*").eq("tree_id", id);
     const { data: c } = await supabase.from("connections").select("*").eq("tree_id", id);
-    setTreeId(id); setTreeName(tree.name||"Mi Familia");
-    setMembers(m||[]); setConnections(c||[]);
+    setTreeId(id); treeIdRef.current = id;
+    setMembers(m||[]); membersRef.current = m||[];
+    setConnections(c||[]);
     setTreeIdInUrl(id); saveRecentTree(id, tree.name||"Mi Familia");
     setScreen("tree");
   };
@@ -219,9 +220,22 @@ export default function App() {
     if (!treeId) return;
     const ch1 = supabase.channel("m-"+treeId)
       .on("postgres_changes",{event:"*",schema:"public",table:"members",filter:`tree_id=eq.${treeId}`},p=>{
-        if(p.eventType==="INSERT") setMembers(prev=>prev.find(x=>x.id===p.new.id)?prev:[...prev,p.new]);
-        else if(p.eventType==="UPDATE") setMembers(prev=>prev.map(x=>x.id===p.new.id?{...x,...p.new}:x));
-        else if(p.eventType==="DELETE") setMembers(prev=>prev.filter(x=>x.id!==p.old.id));
+        if(p.eventType==="INSERT") {
+          setMembers(prev=>{
+            const updated = prev.find(x=>x.id===p.new.id)?prev:[...prev,p.new];
+            membersRef.current = updated; return updated;
+          });
+        } else if(p.eventType==="UPDATE") {
+          setMembers(prev=>{
+            const updated = prev.map(x=>x.id===p.new.id?{...x,...p.new}:x);
+            membersRef.current = updated; return updated;
+          });
+        } else if(p.eventType==="DELETE") {
+          setMembers(prev=>{
+            const updated = prev.filter(x=>x.id!==p.old.id);
+            membersRef.current = updated; return updated;
+          });
+        }
       }).subscribe();
     const ch2 = supabase.channel("c-"+treeId)
       .on("postgres_changes",{event:"*",schema:"public",table:"connections",filter:`tree_id=eq.${treeId}`},p=>{
@@ -235,17 +249,40 @@ export default function App() {
     if (!file) return;
     const r = new FileReader(); r.onload = e=>cb(e.target.result); r.readAsDataURL(file);
   };
+
   const isMine = m => !m.creator_id || m.creator_id === MY_ID;
 
-  // ── CRUD ──────────────────────────────────────────────────────
+  // ── connectMembers: verifica en Supabase directamente (sin stale closure) ──
   const connectMembers = async (fromId, toId) => {
-    const exists = connections.some(c=>(c.from_id===fromId&&c.to_id===toId)||(c.from_id===toId&&c.to_id===fromId));
-    if (exists) { showToast("⚠️ Ya existe conexión entre estas personas","#E67E22"); return; }
-    const { data, error } = await supabase.from("connections").insert({ tree_id:treeId, from_id:fromId, to_id:toId, type:connType }).select().single();
+    const tid = treeIdRef.current;
+    const ct  = connTypeRef.current;
+    if (!tid || !fromId || !toId || fromId === toId) return;
+
+    // Verificar duplicado directamente en Supabase
+    const { data: existing } = await supabase
+      .from("connections")
+      .select("id")
+      .eq("tree_id", tid)
+      .or(`and(from_id.eq.${fromId},to_id.eq.${toId}),and(from_id.eq.${toId},to_id.eq.${fromId})`);
+
+    if (existing && existing.length > 0) {
+      showToast("⚠️ Ya existe una conexión entre estas personas", "#E67E22");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("connections")
+      .insert({ tree_id:tid, from_id:fromId, to_id:toId, type:ct })
+      .select().single();
+
     if (error) showToast("❌ Error: "+error.message);
-    else if (data) { setConnections(p=>[...p,data]); showToast("✓ Conexión creada","#2D7A4F"); }
+    else if (data) {
+      setConnections(p=>[...p, data]);
+      showToast("✓ Conexión creada", "#2D7A4F");
+    }
   };
 
+  // ── CRUD ──────────────────────────────────────────────────────
   const addMember = async () => {
     if (!form.name.trim()||!treeId) return;
     const cvs = canvasRef.current;
@@ -257,13 +294,13 @@ export default function App() {
       y:(cvs.clientHeight/2-p.y)/z-90+(Math.random()-0.5)*60,
     }).select().single();
     if (error) { showToast("❌ Error: "+error.message); return; }
-    if (data) setMembers(prev=>[...prev,data]);
+    if (data) { setMembers(p=>[...p,data]); membersRef.current=[...membersRef.current,data]; }
     setForm({ name:"", role:"Padre/Madre", photo:null, year:"" });
     setShowModal(false);
   };
 
   const removeMember = async id => {
-    const m = members.find(x=>x.id===id);
+    const m = membersRef.current.find(x=>x.id===id);
     if (!isMine(m)) { showToast("🔒 Solo puedes eliminar tus propias tarjetas"); return; }
     await supabase.from("members").delete().eq("id",id);
     setMembers(p=>p.filter(x=>x.id!==id));
@@ -277,13 +314,14 @@ export default function App() {
   };
 
   const updateMemberPos = async (id, x, y) => {
-    const m = members.find(mem=>mem.id===id);
-    if (!isMine(m)) return;
+    const m = membersRef.current.find(mem=>mem.id===id);
+    if (!m || !isMine(m)) return;
+    setMembers(p=>p.map(mem=>mem.id===id?{...mem,x,y}:mem));
     await supabase.from("members").update({x,y}).eq("id",id);
   };
 
   const updateMemberPhoto = async (id, photo) => {
-    const m = members.find(x=>x.id===id);
+    const m = membersRef.current.find(x=>x.id===id);
     if (!isMine(m)) { showToast("🔒 Solo puedes editar tus propias tarjetas"); return; }
     await supabase.from("members").update({photo}).eq("id",id);
     setMembers(p=>p.map(mem=>mem.id===id?{...mem,photo}:mem));
@@ -300,22 +338,41 @@ export default function App() {
     setExporting(false);
   };
 
-  // ── MOUSE events ──────────────────────────────────────────────
-  const onCardMouseDown = useCallback((e, id) => {
-    e.stopPropagation();
-    if (connectMode) {
-      if (!connectFirst) { setConnectFirst(id); return; }
-      if (connectFirst===id) { setConnectFirst(null); return; }
-      connectMembers(connectFirst, id);
-      setConnectFirst(null); setConnectMode(false);
+  // ── handleCardInteraction: unificado para mouse y touch ───────
+  const handleCardInteraction = useCallback((id, clientX, clientY, isTouch=false) => {
+    if (connectModeRef.current) {
+      const first = connectFirstRef.current;
+      if (!first) {
+        setConnectFirst(id); connectFirstRef.current = id;
+        return;
+      }
+      if (first === id) {
+        setConnectFirst(null); connectFirstRef.current = null;
+        return;
+      }
+      // Crear conexión — usa refs para evitar stale closure
+      connectMembers(first, id);
+      setConnectFirst(null); connectFirstRef.current = null;
+      setConnectMode(false); connectModeRef.current = false;
       return;
     }
-    const m = members.find(x=>x.id===id);
+    // Modo normal
+    const m = membersRef.current.find(x=>x.id===id);
     setSelected(id);
-    if (!isMine(m)) return;
+    if (!m || !isMine(m)) return;
     draggingRef.current = id;
-    dragOffRef.current = { x: e.clientX/zoomRef.current - m.x, y: e.clientY/zoomRef.current - m.y };
-  }, [connectMode, connectFirst, members, connType, treeId, connections]);
+    dragOffRef.current = {
+      x: clientX/zoomRef.current - m.x,
+      y: clientY/zoomRef.current - m.y
+    };
+    if (isTouch) touchPanningRef.current = false;
+  }, []); // deps vacías — usa solo refs
+
+  // ── Mouse events ──────────────────────────────────────────────
+  const onCardMouseDown = useCallback((e, id) => {
+    e.stopPropagation();
+    handleCardInteraction(id, e.clientX, e.clientY, false);
+  }, [handleCardInteraction]);
 
   const onMouseMove = useCallback(e => {
     if (draggingRef.current !== null) {
@@ -323,31 +380,34 @@ export default function App() {
       const ny = e.clientY/zoomRef.current - dragOffRef.current.y;
       setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:nx,y:ny}:m));
     } else if (isPanningRef.current) {
-      setPan({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
+      setPan({ x:e.clientX-panStartRef.current.x, y:e.clientY-panStartRef.current.y });
     }
   }, []);
 
   const onMouseUp = useCallback(e => {
     if (draggingRef.current !== null) {
-      updateMemberPos(draggingRef.current, e.clientX/zoomRef.current - dragOffRef.current.x, e.clientY/zoomRef.current - dragOffRef.current.y);
+      updateMemberPos(
+        draggingRef.current,
+        e.clientX/zoomRef.current - dragOffRef.current.x,
+        e.clientY/zoomRef.current - dragOffRef.current.y
+      );
       draggingRef.current = null;
     }
     isPanningRef.current = false;
-  }, [members]);
+  }, []);
 
   const onCanvasMouseDown = e => {
     if (e.target===canvasRef.current||e.target.tagName==="svg"||e.target.tagName==="SVG") {
       setSelected(null);
-      if (connectMode) { setConnectFirst(null); return; }
+      if (connectModeRef.current) { setConnectFirst(null); connectFirstRef.current=null; return; }
       isPanningRef.current = true;
-      panStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
+      panStartRef.current = { x:e.clientX-panRef.current.x, y:e.clientY-panRef.current.y };
     }
   };
 
   const onWheel = e => {
     e.preventDefault();
-    const newZoom = Math.min(3, Math.max(0.2, zoomRef.current - e.deltaY*0.001));
-    setZoom(newZoom);
+    setZoom(z => Math.min(3, Math.max(0.2, z - e.deltaY*0.001)));
   };
 
   useEffect(() => {
@@ -356,124 +416,91 @@ export default function App() {
     return () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp); };
   }, [onMouseMove, onMouseUp]);
 
-  // ── TOUCH events (pinch zoom + pan + drag) ────────────────────
-  const getTouchDist = (t1, t2) => {
-    const dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
-    return Math.sqrt(dx*dx + dy*dy);
+  // ── Touch events ──────────────────────────────────────────────
+  const getTouchDist = (t1,t2) => {
+    const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;
+    return Math.sqrt(dx*dx+dy*dy);
   };
-  const getTouchMid = (t1, t2) => ({
-    x: (t1.clientX + t2.clientX) / 2,
-    y: (t1.clientY + t2.clientY) / 2,
-  });
+  const getTouchMid = (t1,t2) => ({ x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2 });
 
   const onTouchStart = useCallback(e => {
-    if (e.touches.length === 2) {
-      // Pinch start
+    if (e.touches.length===2) {
       e.preventDefault();
-      lastTouchDistRef.current = getTouchDist(e.touches[0], e.touches[1]);
-      lastTouchMidRef.current = getTouchMid(e.touches[0], e.touches[1]);
-      draggingRef.current = null;
-      touchPanningRef.current = false;
-    } else if (e.touches.length === 1) {
-      // Single touch — could be pan or card drag
+      lastTouchDistRef.current = getTouchDist(e.touches[0],e.touches[1]);
+      lastTouchMidRef.current  = getTouchMid(e.touches[0],e.touches[1]);
+      draggingRef.current = null; touchPanningRef.current = false;
+    } else if (e.touches.length===1) {
       const t = e.touches[0];
-      touchPanStartRef.current = { x: t.clientX - panRef.current.x, y: t.clientY - panRef.current.y };
+      touchPanStartRef.current = { x:t.clientX-panRef.current.x, y:t.clientY-panRef.current.y };
       touchPanningRef.current = true;
     }
   }, []);
 
   const onTouchMove = useCallback(e => {
-    if (e.touches.length === 2) {
+    if (e.touches.length===2) {
       e.preventDefault();
-      const dist = getTouchDist(e.touches[0], e.touches[1]);
-      const mid = getTouchMid(e.touches[0], e.touches[1]);
-
+      const dist = getTouchDist(e.touches[0],e.touches[1]);
+      const mid  = getTouchMid(e.touches[0],e.touches[1]);
       if (lastTouchDistRef.current !== null) {
         const scale = dist / lastTouchDistRef.current;
         const newZoom = Math.min(3, Math.max(0.2, zoomRef.current * scale));
-
-        // Zoom hacia el centro del pellizco
         const cvs = canvasRef.current;
         if (cvs) {
           const rect = cvs.getBoundingClientRect();
-          const mx = mid.x - rect.left;
-          const my = mid.y - rect.top;
-          const wx = (mx - panRef.current.x) / zoomRef.current;
-          const wy = (my - panRef.current.y) / zoomRef.current;
-          const newPanX = mx - wx * newZoom;
-          const newPanY = my - wy * newZoom;
-          setPan({ x: newPanX, y: newPanY });
+          const mx = mid.x - rect.left, my = mid.y - rect.top;
+          const wx = (mx-panRef.current.x)/zoomRef.current;
+          const wy = (my-panRef.current.y)/zoomRef.current;
+          const npx = mx - wx*newZoom, npy = my - wy*newZoom;
+          setPan({ x:npx, y:npy });
         }
         setZoom(newZoom);
       }
-
-      // Pan simultáneo al pellizco
       if (lastTouchMidRef.current) {
-        const dx = mid.x - lastTouchMidRef.current.x;
-        const dy = mid.y - lastTouchMidRef.current.y;
-        setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+        const dx=mid.x-lastTouchMidRef.current.x, dy=mid.y-lastTouchMidRef.current.y;
+        setPan(p=>({ x:p.x+dx, y:p.y+dy }));
       }
-
       lastTouchDistRef.current = dist;
-      lastTouchMidRef.current = mid;
-    } else if (e.touches.length === 1) {
+      lastTouchMidRef.current  = mid;
+    } else if (e.touches.length===1) {
       const t = e.touches[0];
       if (draggingRef.current !== null) {
-        // Arrastrar tarjeta
         const nx = t.clientX/zoomRef.current - dragOffRef.current.x;
         const ny = t.clientY/zoomRef.current - dragOffRef.current.y;
         setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:nx,y:ny}:m));
       } else if (touchPanningRef.current) {
-        // Pan del canvas
-        setPan({ x: t.clientX - touchPanStartRef.current.x, y: t.clientY - touchPanStartRef.current.y });
+        setPan({ x:t.clientX-touchPanStartRef.current.x, y:t.clientY-touchPanStartRef.current.y });
       }
     }
   }, []);
 
   const onTouchEnd = useCallback(e => {
-    lastTouchDistRef.current = null;
-    lastTouchMidRef.current = null;
+    lastTouchDistRef.current = null; lastTouchMidRef.current = null;
     if (draggingRef.current !== null) {
-      if (e.changedTouches.length > 0) {
+      if (e.changedTouches.length>0) {
         const t = e.changedTouches[0];
-        updateMemberPos(draggingRef.current, t.clientX/zoomRef.current - dragOffRef.current.x, t.clientY/zoomRef.current - dragOffRef.current.y);
+        updateMemberPos(draggingRef.current, t.clientX/zoomRef.current-dragOffRef.current.x, t.clientY/zoomRef.current-dragOffRef.current.y);
       }
       draggingRef.current = null;
     }
     touchPanningRef.current = false;
-  }, [members]);
+  }, []);
 
   const onCardTouchStart = useCallback((e, id) => {
-    if (e.touches.length !== 1) return;
+    if (e.touches.length!==1) return;
     e.stopPropagation();
-    touchPanningRef.current = false; // no pan cuando arrastramos tarjeta
-
-    if (connectMode) {
-      if (!connectFirst) { setConnectFirst(id); return; }
-      if (connectFirst===id) { setConnectFirst(null); return; }
-      connectMembers(connectFirst, id);
-      setConnectFirst(null); setConnectMode(false);
-      return;
-    }
-    const m = members.find(x=>x.id===id);
-    setSelected(id);
-    if (!isMine(m)) return;
     const t = e.touches[0];
-    draggingRef.current = id;
-    dragOffRef.current = { x: t.clientX/zoomRef.current - m.x, y: t.clientY/zoomRef.current - m.y };
-  }, [connectMode, connectFirst, members, connType, treeId, connections]);
+    handleCardInteraction(id, t.clientX, t.clientY, true);
+  }, [handleCardInteraction]);
 
-  // Registrar touch listeners con passive:false para poder hacer preventDefault
   useEffect(() => {
-    const cvs = canvasRef.current;
-    if (!cvs) return;
-    cvs.addEventListener("touchstart", onTouchStart, { passive: false });
-    cvs.addEventListener("touchmove", onTouchMove, { passive: false });
-    cvs.addEventListener("touchend", onTouchEnd, { passive: false });
+    const cvs = canvasRef.current; if (!cvs) return;
+    cvs.addEventListener("touchstart", onTouchStart, { passive:false });
+    cvs.addEventListener("touchmove",  onTouchMove,  { passive:false });
+    cvs.addEventListener("touchend",   onTouchEnd,   { passive:false });
     return () => {
       cvs.removeEventListener("touchstart", onTouchStart);
-      cvs.removeEventListener("touchmove", onTouchMove);
-      cvs.removeEventListener("touchend", onTouchEnd);
+      cvs.removeEventListener("touchmove",  onTouchMove);
+      cvs.removeEventListener("touchend",   onTouchEnd);
     };
   }, [onTouchStart, onTouchMove, onTouchEnd]);
 
@@ -489,9 +516,8 @@ export default function App() {
   const shareWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
   const shareEmail = () => window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
 
-  // ── Pantallas ─────────────────────────────────────────────────
   if (screen==="loading") return (
-    <div style={{ width:"100vw", height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F5F0E8", fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"rgba(93,58,26,0.5)", letterSpacing:1 }}>
+    <div style={{ width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F0E8",fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(93,58,26,0.5)",letterSpacing:1 }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
       🌳 Cargando...
     </div>
@@ -499,70 +525,80 @@ export default function App() {
 
   if (screen==="home") return <HomeScreen onOpen={openTree} onCreate={createTree}/>;
 
+  // ── Render árbol ──────────────────────────────────────────────
   return (
-    <div style={{ width:"100vw", height:"100vh", background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)", display:"flex", flexDirection:"column", userSelect:"none", overflow:"hidden", fontFamily:"'Jost',sans-serif", touchAction:"none" }}>
+    <div style={{ width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
       <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{ display:"none" }}/>
 
-      {/* ── Header ── */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", background:"rgba(245,240,232,0.92)", backdropFilter:"blur(8px)", borderBottom:"1px solid rgba(139,111,71,0.15)", flexShrink:0, gap:8, flexWrap:"wrap" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <button onClick={goHome} style={{ padding:"5px 10px", border:"1.5px solid rgba(139,111,71,0.25)", borderRadius:2, background:"transparent", color:"rgba(93,58,26,0.5)", fontFamily:"'Jost',sans-serif", fontSize:11, cursor:"pointer" }}>← Inicio</button>
+      {/* Header */}
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"rgba(245,240,232,0.92)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(139,111,71,0.15)",flexShrink:0,gap:8,flexWrap:"wrap" }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <button onClick={goHome} style={{ padding:"5px 10px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"transparent",color:"rgba(93,58,26,0.5)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer" }}>← Inicio</button>
           <div>
-            <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, fontWeight:300, color:"#3D2B1F", letterSpacing:1 }}>
-              Árbol <em style={{ fontStyle:"italic", color:"#8B6F47" }}>Genealógico</em>
-            </div>
-            <div style={{ fontSize:10, color:"rgba(93,58,26,0.45)", marginTop:1 }}>
-              {members.length} personas · {connections.length} vínculos · <span style={{ color:"#5B7B6F" }}>● en vivo</span>
-            </div>
+            <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:300,color:"#3D2B1F",letterSpacing:1 }}>Árbol <em style={{ fontStyle:"italic",color:"#8B6F47" }}>Genealógico</em></div>
+            <div style={{ fontSize:10,color:"rgba(93,58,26,0.45)",marginTop:1 }}>{members.length} personas · {connections.length} vínculos · <span style={{ color:"#5B7B6F" }}>● en vivo</span></div>
           </div>
         </div>
-        <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
           {connectMode ? (
             <>
-              <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+              <div style={{ display:"flex",gap:3,flexWrap:"wrap" }}>
                 {CONN_BTNS.map(([t,l])=>(
-                  <button key={t} onClick={()=>setConnType(t)} style={{ padding:"4px 8px", border:"1.5px solid", borderColor:connType===t?"#8B6F47":"rgba(139,111,71,0.25)", borderRadius:2, background:connType===t?"#8B6F47":"transparent", color:connType===t?"#FFF8F0":"#8B6F47", fontSize:10, cursor:"pointer", fontFamily:"'Jost',sans-serif", letterSpacing:"0.5px", textTransform:"uppercase" }}>{l}</button>
+                  <button key={t} onClick={()=>{setConnType(t);connTypeRef.current=t;}}
+                    style={{ padding:"4px 8px",border:"1.5px solid",borderColor:connType===t?"#8B6F47":"rgba(139,111,71,0.25)",borderRadius:2,background:connType===t?"#8B6F47":"transparent",color:connType===t?"#FFF8F0":"#8B6F47",fontSize:10,cursor:"pointer",fontFamily:"'Jost',sans-serif",letterSpacing:"0.5px",textTransform:"uppercase" }}>{l}</button>
                 ))}
               </div>
-              <Btn onClick={()=>{setConnectMode(false);setConnectFirst(null);}} color="#8B6F47">✕</Btn>
+              <Btn onClick={()=>{setConnectMode(false);connectModeRef.current=false;setConnectFirst(null);connectFirstRef.current=null;}} color="#8B6F47">✕</Btn>
             </>
           ) : (
             <>
-              <Btn onClick={()=>{setConnectMode(true);setConnectFirst(null);}}>↔ Conectar</Btn>
-              <Btn onClick={exportPDF} style={{ borderColor:"rgba(139,111,71,0.4)", color:"#5D3A1A" }}>{exporting?"...":"↓ PDF"}</Btn>
-              <Btn onClick={()=>setShowShare(true)} style={{ borderColor:"rgba(91,123,111,0.4)", color:"#3D6B5A" }}>🔗 Compartir</Btn>
+              <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>
+              <Btn onClick={exportPDF} style={{ borderColor:"rgba(139,111,71,0.4)",color:"#5D3A1A" }}>{exporting?"...":"↓ PDF"}</Btn>
+              <Btn onClick={()=>setShowShare(true)} style={{ borderColor:"rgba(91,123,111,0.4)",color:"#3D6B5A" }}>🔗 Compartir</Btn>
               <Btn onClick={()=>setShowModal(true)} primary>+ Agregar</Btn>
             </>
           )}
         </div>
       </div>
 
-      {/* ── Canvas ── */}
+      {/* Canvas */}
       <div ref={canvasRef}
-        style={{ flex:1, position:"relative", overflow:"hidden", cursor:isPanningRef.current?"grabbing":"grab", touchAction:"none" }}
+        style={{ flex:1,position:"relative",overflow:"hidden",cursor:"grab",touchAction:"none" }}
         onMouseDown={onCanvasMouseDown}
         onWheel={onWheel}>
-        <div style={{ position:"absolute", top:0, left:0, transformOrigin:"0 0", transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
+        <div style={{ position:"absolute",top:0,left:0,transformOrigin:"0 0",transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
 
-          {/* SVG líneas */}
-          <svg style={{ position:"absolute", top:0, left:0, width:8000, height:8000, pointerEvents:"none" }}>
-            <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="rgba(93,58,26,0.35)"/></marker></defs>
+          {/* SVG Conexiones */}
+          <svg style={{ position:"absolute",top:0,left:0,width:12000,height:12000,pointerEvents:"none",overflow:"visible" }}>
+            <defs>
+              <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                <path d="M0,0 L0,7 L7,3.5z" fill="rgba(93,58,26,0.4)"/>
+              </marker>
+            </defs>
             {connections.map(conn=>{
-              const fm=members.find(x=>x.id===conn.from_id), tm=members.find(x=>x.id===conn.to_id);
+              const fm=members.find(x=>x.id===conn.from_id);
+              const tm=members.find(x=>x.id===conn.to_id);
               if(!fm||!tm) return null;
-              const x1=fm.x+77,y1=fm.y+120,x2=tm.x+77,y2=tm.y+120;
-              const mx=(x1+x2)/2,my=(y1+y2)/2;
+              // Ancla en el centro horizontal de la tarjeta, a 2/3 de la altura
+              const CARD_W=155, CARD_H=240;
+              const x1=fm.x+CARD_W/2, y1=fm.y+CARD_H*0.6;
+              const x2=tm.x+CARD_W/2, y2=tm.y+CARD_H*0.6;
+              const mx=(x1+x2)/2, my=(y1+y2)/2;
               const s=CONN[conn.type]||CONN["padre-hijo"];
-              const d=s.curve?`M${x1} ${y1} C${x1} ${y1+(y2-y1)*0.45},${x2} ${y2-(y2-y1)*0.45},${x2} ${y2}`:`M${x1} ${y1} L${x2} ${y2}`;
+              const d=s.curve
+                ?`M${x1} ${y1} C${x1} ${y1+(y2-y1)*0.45},${x2} ${y2-(y2-y1)*0.45},${x2} ${y2}`
+                :`M${x1} ${y1} L${x2} ${y2}`;
               return (
                 <g key={conn.id}>
-                  <path d={d} fill="none" stroke={s.stroke} strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray={s.dash||undefined} markerEnd={s.curve?"url(#arr)":undefined}/>
-                  <text x={mx} y={my-7} textAnchor="middle" fontSize="9" fill="rgba(93,58,26,0.4)" fontFamily="Jost,sans-serif">{s.label}</text>
-                  <circle cx={mx} cy={my+5} r="8" fill="rgba(245,240,232,0.93)" stroke="rgba(139,111,71,0.25)" strokeWidth="1"
-                    style={{ cursor:"pointer", pointerEvents:"all" }}
+                  <path d={d} fill="none" stroke={s.stroke} strokeWidth="2" strokeOpacity="0.65"
+                    strokeDasharray={s.dash||undefined}
+                    markerEnd={s.curve?"url(#arr)":undefined}/>
+                  <text x={mx} y={my-8} textAnchor="middle" fontSize="9" fill="rgba(93,58,26,0.45)" fontFamily="Jost,sans-serif">{s.label}</text>
+                  <circle cx={mx} cy={my+6} r="9" fill="rgba(245,240,232,0.95)" stroke={s.stroke} strokeWidth="1" strokeOpacity="0.5"
+                    style={{ cursor:"pointer",pointerEvents:"all" }}
                     onClick={e=>{e.stopPropagation();removeConnection(conn.id);}}/>
-                  <text x={mx} y={my+9} textAnchor="middle" fontSize="9" fill="rgba(139,111,71,0.6)" style={{ pointerEvents:"none" }}>✕</text>
+                  <text x={mx} y={my+10} textAnchor="middle" fontSize="10" fill="rgba(139,111,71,0.7)" style={{ pointerEvents:"none" }}>✕</text>
                 </g>
               );
             })}
@@ -570,57 +606,53 @@ export default function App() {
 
           {/* Tarjetas */}
           {members.map(m=>{
-            const col=COLORS[m.role]||COLORS["Otro"], mine=isMine(m), isFirst=connectFirst===m.id;
+            const col=COLORS[m.role]||COLORS["Otro"];
+            const mine=isMine(m), isFirst=connectFirst===m.id;
             return (
               <div key={m.id}
                 onMouseDown={e=>onCardMouseDown(e,m.id)}
                 onTouchStart={e=>onCardTouchStart(e,m.id)}
-                style={{ position:"absolute", left:m.x, top:m.y, width:155,
+                style={{ position:"absolute",left:m.x,top:m.y,width:155,
                   background:isFirst?"rgba(240,252,248,0.97)":"rgba(255,252,245,0.94)",
                   border:`1.5px solid ${isFirst?"#5B7B6F":selected===m.id?(mine?"#8B6F47":"#B43C3C"):"rgba(139,111,71,0.2)"}`,
-                  borderRadius:3, boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.2)":"0 3px 18px rgba(93,58,26,0.08)",
-                  cursor:connectMode?"crosshair":(mine?"pointer":"default"), overflow:"hidden",
-                  touchAction:"none" }}>
+                  borderRadius:3,
+                  boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.25),0 4px 20px rgba(93,58,26,0.1)":"0 3px 18px rgba(93,58,26,0.08)",
+                  cursor:connectMode?"crosshair":(mine?"pointer":"default"),
+                  overflow:"hidden", touchAction:"none" }}>
 
-                {/* Badges */}
                 {!mine&&<div style={{ position:"absolute",top:5,right:5,zIndex:10,background:"rgba(255,252,245,0.9)",borderRadius:2,padding:"1px 5px",fontSize:9,color:"rgba(93,58,26,0.5)",border:"1px solid rgba(139,111,71,0.2)" }}>🔒</div>}
                 {isFirst&&<div style={{ position:"absolute",top:5,left:5,zIndex:10,background:"#5B7B6F",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif" }}>① origen</div>}
 
-                {/* ── FOTO COMPLETA (contain) ── */}
-                {m.photo ? (
-                  <div style={{ width:"100%", height:140, background:"#EDE4D0", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
-                    <img src={m.photo}
-                      style={{ maxWidth:"100%", maxHeight:"140px", width:"100%", height:"100%", objectFit:"contain", display:"block", pointerEvents:"none" }}
-                      draggable={false}/>
+                {/* Foto completa con contain */}
+                {m.photo?(
+                  <div style={{ width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
+                    <img src={m.photo} style={{ maxWidth:"100%",maxHeight:"140px",width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none" }} draggable={false}/>
                   </div>
-                ) : (
-                  <div style={{ width:"100%", height:140, background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:40, color:"rgba(139,111,71,0.3)" }}>👤</div>
+                ):(
+                  <div style={{ width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)" }}>👤</div>
                 )}
 
-                {/* Info */}
                 <div style={{ padding:"9px 11px 10px" }}>
-                  <div style={{ display:"inline-block", padding:"2px 6px", borderRadius:2, fontSize:8, fontWeight:500, letterSpacing:1, textTransform:"uppercase", color:col[1], background:col[0], marginBottom:5 }}>{m.role}</div>
-                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:16, fontWeight:400, color:"#2D1B0E", lineHeight:1.2 }}>{m.name}</div>
-                  {m.year&&<div style={{ fontSize:10, color:"rgba(93,58,26,0.4)", marginTop:2 }}>✦ {m.year}</div>}
+                  <div style={{ display:"inline-block",padding:"2px 6px",borderRadius:2,fontSize:8,fontWeight:500,letterSpacing:1,textTransform:"uppercase",color:col[1],background:col[0],marginBottom:5 }}>{m.role}</div>
+                  <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:400,color:"#2D1B0E",lineHeight:1.2 }}>{m.name}</div>
+                  {m.year&&<div style={{ fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2 }}>✦ {m.year}</div>}
                 </div>
 
-                {/* Acciones */}
                 {selected===m.id&&!connectMode&&(mine?(
-                  <div style={{ display:"flex", gap:3, padding:"6px 7px", borderTop:"1px solid rgba(139,111,71,0.12)", background:"rgba(245,240,232,0.5)" }}>
+                  <div style={{ display:"flex",gap:3,padding:"6px 7px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)" }}>
                     <button onClick={e=>{e.stopPropagation();updatePhotoId.current=m.id;updatePhotoRef.current.click();}}
                       style={{ flex:1,padding:4,background:"transparent",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,fontSize:9,color:"#8B6F47",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>📷 Foto</button>
                     <button onClick={e=>{e.stopPropagation();removeMember(m.id);}}
                       style={{ flex:1,padding:4,background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:9,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>✕</button>
                   </div>
                 ):(
-                  <div style={{ padding:"7px 9px", borderTop:"1px solid rgba(139,111,71,0.12)", background:"rgba(245,240,232,0.5)", fontSize:9, color:"rgba(93,58,26,0.45)", textAlign:"center" }}>🔒 Creada por otro familiar</div>
+                  <div style={{ padding:"7px 9px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)",fontSize:9,color:"rgba(93,58,26,0.45)",textAlign:"center" }}>🔒 Creada por otro familiar</div>
                 ))}
               </div>
             );
           })}
         </div>
 
-        {/* Empty state */}
         {members.length===0&&(
           <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,pointerEvents:"none" }}>
             <div style={{ fontSize:52,opacity:0.14 }}>🌳</div>
@@ -629,14 +661,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Hint conectar */}
         {connectMode&&(
           <div style={{ position:"absolute",bottom:80,left:"50%",transform:"translateX(-50%)",background:"#5D3A1A",color:"#FFF8F0",padding:"9px 18px",borderRadius:2,fontSize:11,letterSpacing:"0.8px",whiteSpace:"nowrap",zIndex:10 }}>
             {connectFirst?"① Toca el segundo miembro":"Toca el primer miembro de la conexión"}
           </div>
         )}
 
-        {/* Toast */}
         {toast&&(
           <div style={{ position:"absolute",top:16,left:"50%",transform:"translateX(-50%)",background:toast.color,color:"#FFF",padding:"10px 20px",borderRadius:2,fontSize:12,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.2)",zIndex:50 }}>
             {toast.msg}
@@ -644,7 +674,6 @@ export default function App() {
         )}
       </div>
 
-      {/* ── Controles flotantes ── */}
       {/* Música */}
       <div onClick={toggleMusic} style={{ position:"fixed",bottom:20,left:16,width:44,height:44,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s" }}>
         {playing?"🔇":"🎵"}
@@ -652,19 +681,15 @@ export default function App() {
 
       {/* Zoom */}
       <div style={{ position:"fixed",bottom:20,right:16,display:"flex",flexDirection:"column",gap:4,zIndex:100 }}>
-        {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],
-          ["⊙",()=>{setZoom(1);setPan({x:0,y:0});}],
-          ["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]
-        ].map(([l,fn])=>(
-          <div key={l} onClick={fn}
-            style={{ width:44,height:44,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)" }}>{l}</div>
+        {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["⊙",()=>{setZoom(1);setPan({x:0,y:0});}],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
+          <div key={l} onClick={fn} style={{ width:44,height:44,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)" }}>{l}</div>
         ))}
       </div>
 
       <input type="file" accept="image/*" ref={updatePhotoRef} style={{ display:"none" }}
         onChange={e=>{ handlePhotoFile(e.target.files[0],photo=>updateMemberPhoto(updatePhotoId.current,photo)); e.target.value=""; }}/>
 
-      {/* ── Modal Compartir ── */}
+      {/* Modal Compartir */}
       {showShare&&(
         <div onClick={()=>setShowShare(false)} style={{ position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)" }}>
@@ -672,9 +697,7 @@ export default function App() {
             <div style={{ fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6 }}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
             <div style={{ padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace" }}>{shareUrl}</div>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12 }}>
-              <button onClick={copyLink} style={{ padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center" }}>
-                {copied?"✓ Copiado":"📋 Copiar"}
-              </button>
+              <button onClick={copyLink} style={{ padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center" }}>{copied?"✓ Copiado":"📋 Copiar"}</button>
               <button onClick={shareWhatsApp} style={{ padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center" }}>💬 WhatsApp</button>
               <button onClick={shareEmail} style={{ padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center" }}>✉️ Email</button>
             </div>
@@ -683,7 +706,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Modal Agregar ── */}
+      {/* Modal Agregar */}
       {showModal&&(
         <div onClick={()=>setShowModal(false)} style={{ position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"90vh",overflowY:"auto" }}>
