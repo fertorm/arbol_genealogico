@@ -84,17 +84,14 @@ function HomeScreen({ onOpen, onCreate }) {
           </div>
           <div style={{ fontSize:12, color:"rgba(93,58,26,0.45)", marginTop:6 }}>Conecta tu historia familiar</div>
         </div>
-
         <button onClick={onCreate}
           style={{ width:"100%", padding:"16px", background:"#5D3A1A", color:"#FFF8F0", border:"none", borderRadius:3, fontFamily:"'Jost',sans-serif", fontSize:13, fontWeight:500, letterSpacing:"1.5px", textTransform:"uppercase", cursor:"pointer", marginBottom:14 }}>
           + Crear nuevo árbol
         </button>
-
         <div style={{ background:"rgba(255,252,245,0.7)", border:"1.5px solid rgba(139,111,71,0.2)", borderRadius:3, padding:"16px", marginBottom:recent.length>0?14:0 }}>
           <div style={{ fontSize:10, letterSpacing:"1.5px", textTransform:"uppercase", color:"#8B6F47", fontWeight:500, marginBottom:10 }}>Continuar árbol existente</div>
           <div style={{ display:"flex", gap:8 }}>
-            <input value={joinId} onChange={e=>{setJoinId(e.target.value);setErr("");}}
-              onKeyDown={e=>e.key==="Enter"&&handleJoin()}
+            <input value={joinId} onChange={e=>{setJoinId(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&handleJoin()}
               placeholder="Pega el link o ID del árbol"
               style={{ flex:1, padding:"9px 11px", border:"1.5px solid rgba(139,111,71,0.25)", borderRadius:2, background:"rgba(245,240,232,0.5)", fontFamily:"'Jost',sans-serif", fontSize:12, color:"#2D1B0E", outline:"none" }}/>
             <button onClick={handleJoin} disabled={joining}
@@ -104,7 +101,6 @@ function HomeScreen({ onOpen, onCreate }) {
           </div>
           {err && <div style={{ fontSize:11, color:"#B43C3C", marginTop:8 }}>{err}</div>}
         </div>
-
         {recent.length > 0 && (
           <div style={{ background:"rgba(255,252,245,0.7)", border:"1.5px solid rgba(139,111,71,0.2)", borderRadius:3, overflow:"hidden" }}>
             <div style={{ padding:"12px 16px 8px", fontSize:10, letterSpacing:"1.5px", textTransform:"uppercase", color:"#8B6F47", fontWeight:500 }}>Mis árboles recientes</div>
@@ -130,6 +126,94 @@ function HomeScreen({ onOpen, onCreate }) {
   );
 }
 
+// ── Modal Editar ──────────────────────────────────────────────────────────────
+function EditModal({ member, onSave, onClose, handlePhotoFile }) {
+  const [form, setForm] = useState({
+    name: member.name || "",
+    role: member.role || "Otro",
+    year: member.year || "",
+    photo: member.photo || null,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    await onSave(member.id, form);
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(45,27,14,0.38)", backdropFilter:"blur(5px)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF8F0", border:"1.5px solid rgba(139,111,71,0.25)", borderRadius:4, padding:24, width:"100%", maxWidth:380, boxShadow:"0 20px 60px rgba(45,27,14,0.2)", maxHeight:"90vh", overflowY:"auto" }}>
+
+        {/* Título con foto preview */}
+        <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:20 }}>
+          <div onClick={()=>document.getElementById("edit-photo-inp").click()}
+            style={{ width:64, height:64, borderRadius:3, overflow:"hidden", background:"#EDE4D0", flexShrink:0, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", border:"1.5px dashed rgba(139,111,71,0.3)", position:"relative" }}>
+            {form.photo
+              ? <img src={form.photo} style={{ width:"100%", height:"100%", objectFit:"contain" }}/>
+              : <span style={{ fontSize:24 }}>👤</span>}
+            <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"rgba(93,58,26,0.5)", fontSize:8, color:"#FFF", textAlign:"center", padding:"2px 0", fontFamily:"'Jost',sans-serif", letterSpacing:"0.5px" }}>📷 cambiar</div>
+          </div>
+          <div>
+            <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, fontWeight:300, color:"#2D1B0E" }}>Editar persona</div>
+            <div style={{ fontSize:11, color:"rgba(93,58,26,0.4)", marginTop:2 }}>Toca la foto para cambiarla</div>
+          </div>
+        </div>
+        <input id="edit-photo-inp" type="file" accept="image/*" style={{ display:"none" }}
+          onChange={e=>{ handlePhotoFile(e.target.files[0], photo=>setForm(f=>({...f,photo}))); e.target.value=""; }}/>
+
+        {/* Campos */}
+        {[
+          { label:"Nombre completo", el:
+            <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+              onKeyDown={e=>e.key==="Enter"&&handleSave()}
+              placeholder="Nombre completo" style={inputStyle}/> },
+          { label:"Relación", el:
+            <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={inputStyle}>
+              {ROLES.map(r=><option key={r}>{r}</option>)}
+            </select> },
+          { label:"Año de nacimiento", el:
+            <input value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))}
+              placeholder="Ej: 1945" style={inputStyle}/> },
+        ].map(({label,el})=>(
+          <div key={label} style={{ marginBottom:12 }}>
+            <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"#8B6F47", fontWeight:500, marginBottom:5 }}>{label}</label>
+            {el}
+          </div>
+        ))}
+
+        {/* Foto grande preview */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"#8B6F47", fontWeight:500, marginBottom:5 }}>Foto</label>
+          <div onClick={()=>document.getElementById("edit-photo-inp").click()}
+            style={{ width:"100%", height:110, border:"1.5px dashed rgba(139,111,71,0.35)", borderRadius:2, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", overflow:"hidden", position:"relative", background:"rgba(245,240,232,0.5)" }}>
+            {form.photo
+              ? <img src={form.photo} style={{ maxWidth:"100%", maxHeight:"110px", objectFit:"contain" }}/>
+              : <span style={{ fontSize:12, color:"rgba(139,111,71,0.5)" }}>📷 Subir / cambiar foto</span>}
+          </div>
+          {form.photo && (
+            <button onClick={()=>setForm(f=>({...f,photo:null}))}
+              style={{ marginTop:6, padding:"4px 10px", background:"transparent", border:"1px solid rgba(180,60,60,0.3)", borderRadius:2, fontSize:10, color:"#B43C3C", cursor:"pointer", fontFamily:"'Jost',sans-serif" }}>
+              ✕ Quitar foto
+            </button>
+          )}
+        </div>
+
+        {/* Botones */}
+        <div style={{ display:"flex", gap:8, marginTop:18 }}>
+          <Btn onClick={onClose} style={{ flex:1, padding:11 }}>Cancelar</Btn>
+          <Btn onClick={handleSave} primary style={{ flex:1, padding:11 }}>
+            {saving ? "Guardando..." : "Guardar cambios"}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── App Principal ─────────────────────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState("loading");
@@ -139,6 +223,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [editingMember, setEditingMember] = useState(null); // <-- modal edición
   const [copied, setCopied] = useState(false);
   const [connectMode, setConnectMode] = useState(false);
   const [connectFirst, setConnectFirst] = useState(null);
@@ -150,28 +235,26 @@ export default function App() {
   const [pan, setPan] = useState({ x:0, y:0 });
   const [form, setForm] = useState({ name:"", role:"Padre/Madre", photo:null, year:"" });
 
-  // ── Refs para evitar stale closures ───────────────────────────
-  const treeIdRef      = useRef(null);
-  const connTypeRef    = useRef("padre-hijo");
+  // Refs
+  const treeIdRef       = useRef(null);
+  const connTypeRef     = useRef("padre-hijo");
   const connectFirstRef = useRef(null);
-  const connectModeRef = useRef(false);
-  const membersRef     = useRef([]);
-  const zoomRef        = useRef(1);
-  const panRef         = useRef({ x:0, y:0 });
-  const draggingRef    = useRef(null);
-  const dragOffRef     = useRef({ x:0, y:0 });
-  const isPanningRef   = useRef(false);
-  const panStartRef    = useRef({ x:0, y:0 });
+  const connectModeRef  = useRef(false);
+  const membersRef      = useRef([]);
+  const zoomRef         = useRef(1);
+  const panRef          = useRef({ x:0, y:0 });
+  const draggingRef     = useRef(null);
+  const dragOffRef      = useRef({ x:0, y:0 });
+  const isPanningRef    = useRef(false);
+  const panStartRef     = useRef({ x:0, y:0 });
   const lastTouchDistRef = useRef(null);
   const lastTouchMidRef  = useRef(null);
   const touchPanningRef  = useRef(false);
   const touchPanStartRef = useRef({ x:0, y:0 });
-  const canvasRef      = useRef(null);
-  const audioRef       = useRef(null);
-  const updatePhotoId  = useRef(null);
-  const updatePhotoRef = useRef(null);
+  const canvasRef       = useRef(null);
+  const audioRef        = useRef(null);
+  const updatePhotoRef  = useRef(null);
 
-  // Sincronizar refs con state
   useEffect(() => { treeIdRef.current = treeId; }, [treeId]);
   useEffect(() => { connTypeRef.current = connType; }, [connType]);
   useEffect(() => { connectFirstRef.current = connectFirst; }, [connectFirst]);
@@ -183,6 +266,13 @@ export default function App() {
   const showToast = (msg, color="#B43C3C") => {
     setToast({ msg, color }); setTimeout(() => setToast(null), 3000);
   };
+
+  const handlePhotoFile = (file, cb) => {
+    if (!file) return;
+    const r = new FileReader(); r.onload = e=>cb(e.target.result); r.readAsDataURL(file);
+  };
+
+  const isMine = m => !m.creator_id || m.creator_id === MY_ID;
 
   // ── Init ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -220,22 +310,9 @@ export default function App() {
     if (!treeId) return;
     const ch1 = supabase.channel("m-"+treeId)
       .on("postgres_changes",{event:"*",schema:"public",table:"members",filter:`tree_id=eq.${treeId}`},p=>{
-        if(p.eventType==="INSERT") {
-          setMembers(prev=>{
-            const updated = prev.find(x=>x.id===p.new.id)?prev:[...prev,p.new];
-            membersRef.current = updated; return updated;
-          });
-        } else if(p.eventType==="UPDATE") {
-          setMembers(prev=>{
-            const updated = prev.map(x=>x.id===p.new.id?{...x,...p.new}:x);
-            membersRef.current = updated; return updated;
-          });
-        } else if(p.eventType==="DELETE") {
-          setMembers(prev=>{
-            const updated = prev.filter(x=>x.id!==p.old.id);
-            membersRef.current = updated; return updated;
-          });
-        }
+        if(p.eventType==="INSERT"){setMembers(prev=>{const u=prev.find(x=>x.id===p.new.id)?prev:[...prev,p.new];membersRef.current=u;return u;});}
+        else if(p.eventType==="UPDATE"){setMembers(prev=>{const u=prev.map(x=>x.id===p.new.id?{...x,...p.new}:x);membersRef.current=u;return u;});}
+        else if(p.eventType==="DELETE"){setMembers(prev=>{const u=prev.filter(x=>x.id!==p.old.id);membersRef.current=u;return u;});}
       }).subscribe();
     const ch2 = supabase.channel("c-"+treeId)
       .on("postgres_changes",{event:"*",schema:"public",table:"connections",filter:`tree_id=eq.${treeId}`},p=>{
@@ -245,48 +322,23 @@ export default function App() {
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
   }, [treeId]);
 
-  const handlePhotoFile = (file, cb) => {
-    if (!file) return;
-    const r = new FileReader(); r.onload = e=>cb(e.target.result); r.readAsDataURL(file);
-  };
-
-  const isMine = m => !m.creator_id || m.creator_id === MY_ID;
-
-  // ── connectMembers: verifica en Supabase directamente (sin stale closure) ──
+  // ── connectMembers ────────────────────────────────────────────
   const connectMembers = async (fromId, toId) => {
-    const tid = treeIdRef.current;
-    const ct  = connTypeRef.current;
-    if (!tid || !fromId || !toId || fromId === toId) return;
-
-    // Verificar duplicado directamente en Supabase
-    const { data: existing } = await supabase
-      .from("connections")
-      .select("id")
-      .eq("tree_id", tid)
+    const tid = treeIdRef.current, ct = connTypeRef.current;
+    if (!tid||!fromId||!toId||fromId===toId) return;
+    const { data: existing } = await supabase.from("connections").select("id").eq("tree_id",tid)
       .or(`and(from_id.eq.${fromId},to_id.eq.${toId}),and(from_id.eq.${toId},to_id.eq.${fromId})`);
-
-    if (existing && existing.length > 0) {
-      showToast("⚠️ Ya existe una conexión entre estas personas", "#E67E22");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("connections")
-      .insert({ tree_id:tid, from_id:fromId, to_id:toId, type:ct })
-      .select().single();
-
+    if (existing && existing.length>0) { showToast("⚠️ Ya existe una conexión entre estas personas","#E67E22"); return; }
+    const { data, error } = await supabase.from("connections").insert({ tree_id:tid, from_id:fromId, to_id:toId, type:ct }).select().single();
     if (error) showToast("❌ Error: "+error.message);
-    else if (data) {
-      setConnections(p=>[...p, data]);
-      showToast("✓ Conexión creada", "#2D7A4F");
-    }
+    else if (data) { setConnections(p=>[...p,data]); showToast("✓ Conexión creada","#2D7A4F"); }
   };
 
   // ── CRUD ──────────────────────────────────────────────────────
   const addMember = async () => {
     if (!form.name.trim()||!treeId) return;
     const cvs = canvasRef.current;
-    const z = zoomRef.current, p = panRef.current;
+    const z=zoomRef.current, p=panRef.current;
     const { data, error } = await supabase.from("members").insert({
       tree_id:treeId, name:form.name.trim(), role:form.role,
       photo:form.photo, year:form.year, creator_id:MY_ID,
@@ -297,6 +349,16 @@ export default function App() {
     if (data) { setMembers(p=>[...p,data]); membersRef.current=[...membersRef.current,data]; }
     setForm({ name:"", role:"Padre/Madre", photo:null, year:"" });
     setShowModal(false);
+  };
+
+  // ── Guardar edición ───────────────────────────────────────────
+  const saveMemberEdit = async (id, fields) => {
+    const { error } = await supabase.from("members")
+      .update({ name:fields.name.trim(), role:fields.role, year:fields.year, photo:fields.photo })
+      .eq("id", id);
+    if (error) { showToast("❌ Error al guardar: "+error.message); return; }
+    setMembers(p => p.map(m => m.id===id ? {...m, name:fields.name.trim(), role:fields.role, year:fields.year, photo:fields.photo} : m));
+    showToast("✓ Cambios guardados", "#2D7A4F");
   };
 
   const removeMember = async id => {
@@ -315,16 +377,9 @@ export default function App() {
 
   const updateMemberPos = async (id, x, y) => {
     const m = membersRef.current.find(mem=>mem.id===id);
-    if (!m || !isMine(m)) return;
+    if (!m||!isMine(m)) return;
     setMembers(p=>p.map(mem=>mem.id===id?{...mem,x,y}:mem));
     await supabase.from("members").update({x,y}).eq("id",id);
-  };
-
-  const updateMemberPhoto = async (id, photo) => {
-    const m = membersRef.current.find(x=>x.id===id);
-    if (!isMine(m)) { showToast("🔒 Solo puedes editar tus propias tarjetas"); return; }
-    await supabase.from("members").update({photo}).eq("id",id);
-    setMembers(p=>p.map(mem=>mem.id===id?{...mem,photo}:mem));
   };
 
   const exportPDF = async () => {
@@ -338,183 +393,124 @@ export default function App() {
     setExporting(false);
   };
 
-  // ── handleCardInteraction: unificado para mouse y touch ───────
+  // ── Interacción con tarjetas ──────────────────────────────────
   const handleCardInteraction = useCallback((id, clientX, clientY, isTouch=false) => {
     if (connectModeRef.current) {
       const first = connectFirstRef.current;
-      if (!first) {
-        setConnectFirst(id); connectFirstRef.current = id;
-        return;
-      }
-      if (first === id) {
-        setConnectFirst(null); connectFirstRef.current = null;
-        return;
-      }
-      // Crear conexión — usa refs para evitar stale closure
+      if (!first) { setConnectFirst(id); connectFirstRef.current=id; return; }
+      if (first===id) { setConnectFirst(null); connectFirstRef.current=null; return; }
       connectMembers(first, id);
-      setConnectFirst(null); connectFirstRef.current = null;
-      setConnectMode(false); connectModeRef.current = false;
+      setConnectFirst(null); connectFirstRef.current=null;
+      setConnectMode(false); connectModeRef.current=false;
       return;
     }
-    // Modo normal
     const m = membersRef.current.find(x=>x.id===id);
     setSelected(id);
-    if (!m || !isMine(m)) return;
+    if (!m||!isMine(m)) return;
     draggingRef.current = id;
-    dragOffRef.current = {
-      x: clientX/zoomRef.current - m.x,
-      y: clientY/zoomRef.current - m.y
-    };
-    if (isTouch) touchPanningRef.current = false;
-  }, []); // deps vacías — usa solo refs
+    dragOffRef.current = { x:clientX/zoomRef.current-m.x, y:clientY/zoomRef.current-m.y };
+    if (isTouch) touchPanningRef.current=false;
+  }, []);
 
-  // ── Mouse events ──────────────────────────────────────────────
-  const onCardMouseDown = useCallback((e, id) => {
+  // ── Mouse ──────────────────────────────────────────────────────
+  const onCardMouseDown = useCallback((e,id) => {
     e.stopPropagation();
     handleCardInteraction(id, e.clientX, e.clientY, false);
   }, [handleCardInteraction]);
 
   const onMouseMove = useCallback(e => {
-    if (draggingRef.current !== null) {
-      const nx = e.clientX/zoomRef.current - dragOffRef.current.x;
-      const ny = e.clientY/zoomRef.current - dragOffRef.current.y;
-      setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:nx,y:ny}:m));
+    if (draggingRef.current!==null) {
+      setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:e.clientX/zoomRef.current-dragOffRef.current.x,y:e.clientY/zoomRef.current-dragOffRef.current.y}:m));
     } else if (isPanningRef.current) {
-      setPan({ x:e.clientX-panStartRef.current.x, y:e.clientY-panStartRef.current.y });
+      setPan({x:e.clientX-panStartRef.current.x,y:e.clientY-panStartRef.current.y});
     }
   }, []);
 
   const onMouseUp = useCallback(e => {
-    if (draggingRef.current !== null) {
-      updateMemberPos(
-        draggingRef.current,
-        e.clientX/zoomRef.current - dragOffRef.current.x,
-        e.clientY/zoomRef.current - dragOffRef.current.y
-      );
-      draggingRef.current = null;
+    if (draggingRef.current!==null) {
+      updateMemberPos(draggingRef.current, e.clientX/zoomRef.current-dragOffRef.current.x, e.clientY/zoomRef.current-dragOffRef.current.y);
+      draggingRef.current=null;
     }
-    isPanningRef.current = false;
+    isPanningRef.current=false;
   }, []);
 
   const onCanvasMouseDown = e => {
     if (e.target===canvasRef.current||e.target.tagName==="svg"||e.target.tagName==="SVG") {
       setSelected(null);
       if (connectModeRef.current) { setConnectFirst(null); connectFirstRef.current=null; return; }
-      isPanningRef.current = true;
-      panStartRef.current = { x:e.clientX-panRef.current.x, y:e.clientY-panRef.current.y };
+      isPanningRef.current=true;
+      panStartRef.current={x:e.clientX-panRef.current.x,y:e.clientY-panRef.current.y};
     }
   };
 
-  const onWheel = e => {
-    e.preventDefault();
-    setZoom(z => Math.min(3, Math.max(0.2, z - e.deltaY*0.001)));
-  };
+  const onWheel = e => { e.preventDefault(); setZoom(z=>Math.min(3,Math.max(0.2,z-e.deltaY*0.001))); };
 
   useEffect(() => {
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp); };
-  }, [onMouseMove, onMouseUp]);
+    window.addEventListener("mousemove",onMouseMove);
+    window.addEventListener("mouseup",onMouseUp);
+    return ()=>{ window.removeEventListener("mousemove",onMouseMove); window.removeEventListener("mouseup",onMouseUp); };
+  }, [onMouseMove,onMouseUp]);
 
-  // ── Touch events ──────────────────────────────────────────────
-  const getTouchDist = (t1,t2) => {
-    const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;
-    return Math.sqrt(dx*dx+dy*dy);
-  };
-  const getTouchMid = (t1,t2) => ({ x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2 });
+  // ── Touch ──────────────────────────────────────────────────────
+  const getTouchDist=(t1,t2)=>{const dx=t1.clientX-t2.clientX,dy=t1.clientY-t2.clientY;return Math.sqrt(dx*dx+dy*dy);};
+  const getTouchMid=(t1,t2)=>({x:(t1.clientX+t2.clientX)/2,y:(t1.clientY+t2.clientY)/2});
 
-  const onTouchStart = useCallback(e => {
-    if (e.touches.length===2) {
+  const onTouchStart = useCallback(e=>{
+    if(e.touches.length===2){e.preventDefault();lastTouchDistRef.current=getTouchDist(e.touches[0],e.touches[1]);lastTouchMidRef.current=getTouchMid(e.touches[0],e.touches[1]);draggingRef.current=null;touchPanningRef.current=false;}
+    else if(e.touches.length===1){const t=e.touches[0];touchPanStartRef.current={x:t.clientX-panRef.current.x,y:t.clientY-panRef.current.y};touchPanningRef.current=true;}
+  },[]);
+
+  const onTouchMove = useCallback(e=>{
+    if(e.touches.length===2){
       e.preventDefault();
-      lastTouchDistRef.current = getTouchDist(e.touches[0],e.touches[1]);
-      lastTouchMidRef.current  = getTouchMid(e.touches[0],e.touches[1]);
-      draggingRef.current = null; touchPanningRef.current = false;
-    } else if (e.touches.length===1) {
-      const t = e.touches[0];
-      touchPanStartRef.current = { x:t.clientX-panRef.current.x, y:t.clientY-panRef.current.y };
-      touchPanningRef.current = true;
-    }
-  }, []);
-
-  const onTouchMove = useCallback(e => {
-    if (e.touches.length===2) {
-      e.preventDefault();
-      const dist = getTouchDist(e.touches[0],e.touches[1]);
-      const mid  = getTouchMid(e.touches[0],e.touches[1]);
-      if (lastTouchDistRef.current !== null) {
-        const scale = dist / lastTouchDistRef.current;
-        const newZoom = Math.min(3, Math.max(0.2, zoomRef.current * scale));
-        const cvs = canvasRef.current;
-        if (cvs) {
-          const rect = cvs.getBoundingClientRect();
-          const mx = mid.x - rect.left, my = mid.y - rect.top;
-          const wx = (mx-panRef.current.x)/zoomRef.current;
-          const wy = (my-panRef.current.y)/zoomRef.current;
-          const npx = mx - wx*newZoom, npy = my - wy*newZoom;
-          setPan({ x:npx, y:npy });
-        }
+      const dist=getTouchDist(e.touches[0],e.touches[1]),mid=getTouchMid(e.touches[0],e.touches[1]);
+      if(lastTouchDistRef.current!==null){
+        const scale=dist/lastTouchDistRef.current,newZoom=Math.min(3,Math.max(0.2,zoomRef.current*scale));
+        const cvs=canvasRef.current;
+        if(cvs){const rect=cvs.getBoundingClientRect();const mx=mid.x-rect.left,my=mid.y-rect.top;const wx=(mx-panRef.current.x)/zoomRef.current,wy=(my-panRef.current.y)/zoomRef.current;setPan({x:mx-wx*newZoom,y:my-wy*newZoom});}
         setZoom(newZoom);
       }
-      if (lastTouchMidRef.current) {
-        const dx=mid.x-lastTouchMidRef.current.x, dy=mid.y-lastTouchMidRef.current.y;
-        setPan(p=>({ x:p.x+dx, y:p.y+dy }));
-      }
-      lastTouchDistRef.current = dist;
-      lastTouchMidRef.current  = mid;
-    } else if (e.touches.length===1) {
-      const t = e.touches[0];
-      if (draggingRef.current !== null) {
-        const nx = t.clientX/zoomRef.current - dragOffRef.current.x;
-        const ny = t.clientY/zoomRef.current - dragOffRef.current.y;
-        setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:nx,y:ny}:m));
-      } else if (touchPanningRef.current) {
-        setPan({ x:t.clientX-touchPanStartRef.current.x, y:t.clientY-touchPanStartRef.current.y });
-      }
+      if(lastTouchMidRef.current){const dx=mid.x-lastTouchMidRef.current.x,dy=mid.y-lastTouchMidRef.current.y;setPan(p=>({x:p.x+dx,y:p.y+dy}));}
+      lastTouchDistRef.current=dist;lastTouchMidRef.current=mid;
+    } else if(e.touches.length===1){
+      const t=e.touches[0];
+      if(draggingRef.current!==null){setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:t.clientX/zoomRef.current-dragOffRef.current.x,y:t.clientY/zoomRef.current-dragOffRef.current.y}:m));}
+      else if(touchPanningRef.current){setPan({x:t.clientX-touchPanStartRef.current.x,y:t.clientY-touchPanStartRef.current.y});}
     }
-  }, []);
+  },[]);
 
-  const onTouchEnd = useCallback(e => {
-    lastTouchDistRef.current = null; lastTouchMidRef.current = null;
-    if (draggingRef.current !== null) {
-      if (e.changedTouches.length>0) {
-        const t = e.changedTouches[0];
-        updateMemberPos(draggingRef.current, t.clientX/zoomRef.current-dragOffRef.current.x, t.clientY/zoomRef.current-dragOffRef.current.y);
-      }
-      draggingRef.current = null;
-    }
-    touchPanningRef.current = false;
-  }, []);
+  const onTouchEnd = useCallback(e=>{
+    lastTouchDistRef.current=null;lastTouchMidRef.current=null;
+    if(draggingRef.current!==null){if(e.changedTouches.length>0){const t=e.changedTouches[0];updateMemberPos(draggingRef.current,t.clientX/zoomRef.current-dragOffRef.current.x,t.clientY/zoomRef.current-dragOffRef.current.y);}draggingRef.current=null;}
+    touchPanningRef.current=false;
+  },[]);
 
-  const onCardTouchStart = useCallback((e, id) => {
-    if (e.touches.length!==1) return;
+  const onCardTouchStart = useCallback((e,id)=>{
+    if(e.touches.length!==1)return;
     e.stopPropagation();
-    const t = e.touches[0];
-    handleCardInteraction(id, t.clientX, t.clientY, true);
-  }, [handleCardInteraction]);
+    const t=e.touches[0];
+    handleCardInteraction(id,t.clientX,t.clientY,true);
+  },[handleCardInteraction]);
 
-  useEffect(() => {
-    const cvs = canvasRef.current; if (!cvs) return;
-    cvs.addEventListener("touchstart", onTouchStart, { passive:false });
-    cvs.addEventListener("touchmove",  onTouchMove,  { passive:false });
-    cvs.addEventListener("touchend",   onTouchEnd,   { passive:false });
-    return () => {
-      cvs.removeEventListener("touchstart", onTouchStart);
-      cvs.removeEventListener("touchmove",  onTouchMove);
-      cvs.removeEventListener("touchend",   onTouchEnd);
-    };
-  }, [onTouchStart, onTouchMove, onTouchEnd]);
+  useEffect(()=>{
+    const cvs=canvasRef.current;if(!cvs)return;
+    cvs.addEventListener("touchstart",onTouchStart,{passive:false});
+    cvs.addEventListener("touchmove",onTouchMove,{passive:false});
+    cvs.addEventListener("touchend",onTouchEnd,{passive:false});
+    return()=>{cvs.removeEventListener("touchstart",onTouchStart);cvs.removeEventListener("touchmove",onTouchMove);cvs.removeEventListener("touchend",onTouchEnd);};
+  },[onTouchStart,onTouchMove,onTouchEnd]);
 
   const toggleMusic = e => {
     e.stopPropagation();
-    if (!audioRef.current) return;
-    if (!playing) { audioRef.current.volume=0.3; audioRef.current.play().then(()=>setPlaying(true)).catch(()=>{}); }
-    else { audioRef.current.pause(); setPlaying(false); }
+    if(!audioRef.current)return;
+    if(!playing){audioRef.current.volume=0.3;audioRef.current.play().then(()=>setPlaying(true)).catch(()=>{});}
+    else{audioRef.current.pause();setPlaying(false);}
   };
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?tree=${treeId}`;
-  const copyLink = () => { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(()=>setCopied(false),2000); };
-  const shareWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
-  const shareEmail = () => window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
+  const copyLink = ()=>{navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
+  const shareWhatsApp = ()=>window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
+  const shareEmail = ()=>window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
 
   if (screen==="loading") return (
     <div style={{ width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F0E8",fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(93,58,26,0.5)",letterSpacing:1 }}>
@@ -525,7 +521,6 @@ export default function App() {
 
   if (screen==="home") return <HomeScreen onOpen={openTree} onCreate={createTree}/>;
 
-  // ── Render árbol ──────────────────────────────────────────────
   return (
     <div style={{ width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -541,7 +536,7 @@ export default function App() {
           </div>
         </div>
         <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
-          {connectMode ? (
+          {connectMode?(
             <>
               <div style={{ display:"flex",gap:3,flexWrap:"wrap" }}>
                 {CONN_BTNS.map(([t,l])=>(
@@ -551,7 +546,7 @@ export default function App() {
               </div>
               <Btn onClick={()=>{setConnectMode(false);connectModeRef.current=false;setConnectFirst(null);connectFirstRef.current=null;}} color="#8B6F47">✕</Btn>
             </>
-          ) : (
+          ):(
             <>
               <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>
               <Btn onClick={exportPDF} style={{ borderColor:"rgba(139,111,71,0.4)",color:"#5D3A1A" }}>{exporting?"...":"↓ PDF"}</Btn>
@@ -563,41 +558,26 @@ export default function App() {
       </div>
 
       {/* Canvas */}
-      <div ref={canvasRef}
-        style={{ flex:1,position:"relative",overflow:"hidden",cursor:"grab",touchAction:"none" }}
-        onMouseDown={onCanvasMouseDown}
-        onWheel={onWheel}>
+      <div ref={canvasRef} style={{ flex:1,position:"relative",overflow:"hidden",cursor:"grab",touchAction:"none" }}
+        onMouseDown={onCanvasMouseDown} onWheel={onWheel}>
         <div style={{ position:"absolute",top:0,left:0,transformOrigin:"0 0",transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
 
-          {/* SVG Conexiones */}
+          {/* Líneas */}
           <svg style={{ position:"absolute",top:0,left:0,width:12000,height:12000,pointerEvents:"none",overflow:"visible" }}>
-            <defs>
-              <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <path d="M0,0 L0,7 L7,3.5z" fill="rgba(93,58,26,0.4)"/>
-              </marker>
-            </defs>
+            <defs><marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5z" fill="rgba(93,58,26,0.4)"/></marker></defs>
             {connections.map(conn=>{
-              const fm=members.find(x=>x.id===conn.from_id);
-              const tm=members.find(x=>x.id===conn.to_id);
-              if(!fm||!tm) return null;
-              // Ancla en el centro horizontal de la tarjeta, a 2/3 de la altura
-              const CARD_W=155, CARD_H=240;
-              const x1=fm.x+CARD_W/2, y1=fm.y+CARD_H*0.6;
-              const x2=tm.x+CARD_W/2, y2=tm.y+CARD_H*0.6;
-              const mx=(x1+x2)/2, my=(y1+y2)/2;
+              const fm=members.find(x=>x.id===conn.from_id),tm=members.find(x=>x.id===conn.to_id);
+              if(!fm||!tm)return null;
+              const CW=155,CH=240;
+              const x1=fm.x+CW/2,y1=fm.y+CH*0.6,x2=tm.x+CW/2,y2=tm.y+CH*0.6;
+              const mx=(x1+x2)/2,my=(y1+y2)/2;
               const s=CONN[conn.type]||CONN["padre-hijo"];
-              const d=s.curve
-                ?`M${x1} ${y1} C${x1} ${y1+(y2-y1)*0.45},${x2} ${y2-(y2-y1)*0.45},${x2} ${y2}`
-                :`M${x1} ${y1} L${x2} ${y2}`;
-              return (
+              const d=s.curve?`M${x1} ${y1} C${x1} ${y1+(y2-y1)*0.45},${x2} ${y2-(y2-y1)*0.45},${x2} ${y2}`:`M${x1} ${y1} L${x2} ${y2}`;
+              return(
                 <g key={conn.id}>
-                  <path d={d} fill="none" stroke={s.stroke} strokeWidth="2" strokeOpacity="0.65"
-                    strokeDasharray={s.dash||undefined}
-                    markerEnd={s.curve?"url(#arr)":undefined}/>
+                  <path d={d} fill="none" stroke={s.stroke} strokeWidth="2" strokeOpacity="0.65" strokeDasharray={s.dash||undefined} markerEnd={s.curve?"url(#arr)":undefined}/>
                   <text x={mx} y={my-8} textAnchor="middle" fontSize="9" fill="rgba(93,58,26,0.45)" fontFamily="Jost,sans-serif">{s.label}</text>
-                  <circle cx={mx} cy={my+6} r="9" fill="rgba(245,240,232,0.95)" stroke={s.stroke} strokeWidth="1" strokeOpacity="0.5"
-                    style={{ cursor:"pointer",pointerEvents:"all" }}
-                    onClick={e=>{e.stopPropagation();removeConnection(conn.id);}}/>
+                  <circle cx={mx} cy={my+6} r="9" fill="rgba(245,240,232,0.95)" stroke={s.stroke} strokeWidth="1" strokeOpacity="0.5" style={{ cursor:"pointer",pointerEvents:"all" }} onClick={e=>{e.stopPropagation();removeConnection(conn.id);}}/>
                   <text x={mx} y={my+10} textAnchor="middle" fontSize="10" fill="rgba(139,111,71,0.7)" style={{ pointerEvents:"none" }}>✕</text>
                 </g>
               );
@@ -606,9 +586,8 @@ export default function App() {
 
           {/* Tarjetas */}
           {members.map(m=>{
-            const col=COLORS[m.role]||COLORS["Otro"];
-            const mine=isMine(m), isFirst=connectFirst===m.id;
-            return (
+            const col=COLORS[m.role]||COLORS["Otro"],mine=isMine(m),isFirst=connectFirst===m.id;
+            return(
               <div key={m.id}
                 onMouseDown={e=>onCardMouseDown(e,m.id)}
                 onTouchStart={e=>onCardTouchStart(e,m.id)}
@@ -618,12 +597,12 @@ export default function App() {
                   borderRadius:3,
                   boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.25),0 4px 20px rgba(93,58,26,0.1)":"0 3px 18px rgba(93,58,26,0.08)",
                   cursor:connectMode?"crosshair":(mine?"pointer":"default"),
-                  overflow:"hidden", touchAction:"none" }}>
+                  overflow:"hidden",touchAction:"none" }}>
 
                 {!mine&&<div style={{ position:"absolute",top:5,right:5,zIndex:10,background:"rgba(255,252,245,0.9)",borderRadius:2,padding:"1px 5px",fontSize:9,color:"rgba(93,58,26,0.5)",border:"1px solid rgba(139,111,71,0.2)" }}>🔒</div>}
                 {isFirst&&<div style={{ position:"absolute",top:5,left:5,zIndex:10,background:"#5B7B6F",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif" }}>① origen</div>}
 
-                {/* Foto completa con contain */}
+                {/* Foto */}
                 {m.photo?(
                   <div style={{ width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
                     <img src={m.photo} style={{ maxWidth:"100%",maxHeight:"140px",width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none" }} draggable={false}/>
@@ -632,22 +611,26 @@ export default function App() {
                   <div style={{ width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)" }}>👤</div>
                 )}
 
+                {/* Info */}
                 <div style={{ padding:"9px 11px 10px" }}>
                   <div style={{ display:"inline-block",padding:"2px 6px",borderRadius:2,fontSize:8,fontWeight:500,letterSpacing:1,textTransform:"uppercase",color:col[1],background:col[0],marginBottom:5 }}>{m.role}</div>
                   <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:400,color:"#2D1B0E",lineHeight:1.2 }}>{m.name}</div>
                   {m.year&&<div style={{ fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2 }}>✦ {m.year}</div>}
                 </div>
 
-                {selected===m.id&&!connectMode&&(mine?(
-                  <div style={{ display:"flex",gap:3,padding:"6px 7px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)" }}>
-                    <button onClick={e=>{e.stopPropagation();updatePhotoId.current=m.id;updatePhotoRef.current.click();}}
-                      style={{ flex:1,padding:4,background:"transparent",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,fontSize:9,color:"#8B6F47",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>📷 Foto</button>
-                    <button onClick={e=>{e.stopPropagation();removeMember(m.id);}}
-                      style={{ flex:1,padding:4,background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:9,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>✕</button>
-                  </div>
-                ):(
-                  <div style={{ padding:"7px 9px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)",fontSize:9,color:"rgba(93,58,26,0.45)",textAlign:"center" }}>🔒 Creada por otro familiar</div>
-                ))}
+                {/* Acciones cuando está seleccionada */}
+                {selected===m.id&&!connectMode&&(
+                  mine?(
+                    <div style={{ display:"flex",gap:3,padding:"6px 7px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)" }}>
+                      <button onClick={e=>{e.stopPropagation();setEditingMember(m);}}
+                        style={{ flex:2,padding:4,background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.25)",borderRadius:2,fontSize:9,color:"#5D3A1A",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase",fontWeight:500 }}>✏️ Editar</button>
+                      <button onClick={e=>{e.stopPropagation();removeMember(m.id);}}
+                        style={{ flex:1,padding:4,background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:9,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>✕</button>
+                    </div>
+                  ):(
+                    <div style={{ padding:"7px 9px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)",fontSize:9,color:"rgba(93,58,26,0.45)",textAlign:"center" }}>🔒 Creada por otro familiar</div>
+                  )
+                )}
               </div>
             );
           })}
@@ -660,13 +643,11 @@ export default function App() {
             <div style={{ fontSize:12,color:"rgba(93,58,26,0.2)" }}>Presiona "+ Agregar" para comenzar</div>
           </div>
         )}
-
         {connectMode&&(
           <div style={{ position:"absolute",bottom:80,left:"50%",transform:"translateX(-50%)",background:"#5D3A1A",color:"#FFF8F0",padding:"9px 18px",borderRadius:2,fontSize:11,letterSpacing:"0.8px",whiteSpace:"nowrap",zIndex:10 }}>
             {connectFirst?"① Toca el segundo miembro":"Toca el primer miembro de la conexión"}
           </div>
         )}
-
         {toast&&(
           <div style={{ position:"absolute",top:16,left:"50%",transform:"translateX(-50%)",background:toast.color,color:"#FFF",padding:"10px 20px",borderRadius:2,fontSize:12,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.2)",zIndex:50 }}>
             {toast.msg}
@@ -686,8 +667,17 @@ export default function App() {
         ))}
       </div>
 
-      <input type="file" accept="image/*" ref={updatePhotoRef} style={{ display:"none" }}
-        onChange={e=>{ handlePhotoFile(e.target.files[0],photo=>updateMemberPhoto(updatePhotoId.current,photo)); e.target.value=""; }}/>
+      <input type="file" accept="image/*" ref={updatePhotoRef} style={{ display:"none" }}/>
+
+      {/* ── Modal Editar ── */}
+      {editingMember && (
+        <EditModal
+          member={editingMember}
+          onSave={saveMemberEdit}
+          onClose={()=>setEditingMember(null)}
+          handlePhotoFile={handlePhotoFile}
+        />
+      )}
 
       {/* Modal Compartir */}
       {showShare&&(
