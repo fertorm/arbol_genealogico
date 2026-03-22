@@ -261,7 +261,8 @@ export default function App(){
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
   const handlePhotoFile=(file,cb)=>{if(!file)return;const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
-  const isMine=m=>!m.creator_id||m.creator_id===MY_ID;
+  // TEMP: cualquiera puede editar (restricción desactivada)
+  const isMine=m=>true;
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
 
@@ -882,10 +883,10 @@ export default function App(){
           ))}
         </div>
 
-        {/* D-pad */}
-        <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
+        {/* D-pad TEMP desactivado */}
+        {/* <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
           <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
-        </div>
+        </div> */}
 
         {/* Zoom */}
         <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
