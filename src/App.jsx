@@ -227,6 +227,7 @@ export default function App(){
   const panRef          = useRef({x:0,y:0});
   const canvasRef       = useRef(null);
   const audioRef        = useRef(null);   // música principal
+  const audioFadeRef    = useRef(null);   // interval id del fade de audio principal
   const wrapperRef      = useRef(null);
 
   // ── Feature 4: RAF + inertia refs ──────────────────────────────────────────
@@ -252,13 +253,11 @@ export default function App(){
   useEffect(()=>{zoomRef.current=zoom;},[zoom]);
   useEffect(()=>{panRef.current=pan;},[pan]);
 
-  // Bloquear zoom del browser en móvil
+  // Bloquear pinch-zoom del browser en móvil (solo multi-touch en touchmove)
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
-    const pD=(e)=>e.preventDefault();
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pD,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
+    return()=>{document.removeEventListener("touchmove",pZ);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
@@ -308,11 +307,12 @@ export default function App(){
   // ── Feature 2: Abrir/cerrar Soltar con fade de audio ──────────────────────
   const openSoltar = useCallback((m)=>{
     // Reducir música principal
+    if(audioFadeRef.current) clearInterval(audioFadeRef.current);
     if(audioRef.current && playing){
-      const fadeOut = setInterval(()=>{
-        if(!audioRef.current) return clearInterval(fadeOut);
+      audioFadeRef.current = setInterval(()=>{
+        if(!audioRef.current){clearInterval(audioFadeRef.current);return;}
         audioRef.current.volume = Math.max(0.04, audioRef.current.volume - 0.04);
-        if(audioRef.current.volume <= 0.04) clearInterval(fadeOut);
+        if(audioRef.current.volume <= 0.04) clearInterval(audioFadeRef.current);
       },80);
     }
     setSoltarMember(m);
@@ -320,11 +320,12 @@ export default function App(){
 
   const closeSoltar = useCallback(()=>{
     // Restaurar música principal
+    if(audioFadeRef.current) clearInterval(audioFadeRef.current);
     if(audioRef.current && playing){
-      const fadeIn = setInterval(()=>{
-        if(!audioRef.current) return clearInterval(fadeIn);
+      audioFadeRef.current = setInterval(()=>{
+        if(!audioRef.current){clearInterval(audioFadeRef.current);return;}
         audioRef.current.volume = Math.min(0.3, audioRef.current.volume + 0.03);
-        if(audioRef.current.volume >= 0.3) clearInterval(fadeIn);
+        if(audioRef.current.volume >= 0.3) clearInterval(audioFadeRef.current);
       },80);
     }
     setSoltarMember(null);
@@ -620,7 +621,7 @@ export default function App(){
   },[startInertia]);
 
   useEffect(()=>{
-    const el=wrapperRef.current;if(!el)return;
+    const el=canvasRef.current;if(!el)return;
     el.addEventListener("touchstart",onTouchStartUnified,{passive:false});
     el.addEventListener("touchmove",onTouchMoveUnified,{passive:false});
     el.addEventListener("touchend",onTouchEndUnified,{passive:false});
@@ -668,7 +669,7 @@ export default function App(){
 
   return(
     <>
-      <style>{`html,body{touch-action:none;overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
+      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
       <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
@@ -846,7 +847,7 @@ export default function App(){
         </div>
 
         {/* Barra generación */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch",touchAction:"auto"}}>
           <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
           {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
             <button key={g} onClick={()=>setGenFilter(g)}
@@ -857,19 +858,19 @@ export default function App(){
         </div>
 
         {/* D-pad */}
-        <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
+        <div style={{position:"fixed",bottom:68,left:12,zIndex:100,touchAction:"auto"}}>
           <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
         </div>
 
         {/* Zoom */}
         <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
           {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
-            <div key={l} onClick={fn} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)",touchAction:"none"}}>{l}</div>
+            <div key={l} onClick={fn} onTouchEnd={e=>{e.stopPropagation();fn();}} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)"}}>{l}</div>
           ))}
         </div>
 
         {/* Música */}
-        <div onClick={toggleMusic} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s",touchAction:"none"}}>
+        <div onClick={toggleMusic} onTouchEnd={e=>{e.stopPropagation();toggleMusic(e);}} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s"}}>
           {playing?"🔇":"🎵"}
         </div>
 

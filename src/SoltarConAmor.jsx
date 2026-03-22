@@ -63,7 +63,7 @@ export default function SoltarConAmor({ member, myId, treeId, onClose, mainAudio
   useEffect(() => {
     // Fade out música principal
     if (mainAudioRef?.current && mainPlaying) {
-      fadeVolume(mainAudioRef.current, mainAudioRef.current.volume, 0.04, 1200);
+      fadeTimerRef.current = fadeVolume(mainAudioRef.current, mainAudioRef.current.volume, 0.04, 1200);
     }
 
     // Iniciar música soltar con amor
@@ -72,10 +72,12 @@ export default function SoltarConAmor({ member, myId, treeId, onClose, mainAudio
       audio.loop   = true;
       audio.volume = 0;
       audio.play().catch(() => {});
-      fadeVolume(audio, 0, 0.35, 1500);
+      fadeTimerRef.current = fadeVolume(audio, 0, 0.35, 1500);
     }
 
     return () => {
+      // Cancelar fade en curso si el modal se cierra antes de terminar
+      clearInterval(fadeTimerRef.current);
       // Al cerrar: restaurar música principal
       if (mainAudioRef?.current && mainPlaying) {
         fadeVolume(mainAudioRef.current, mainAudioRef.current.volume, 0.3, 1000);
@@ -86,7 +88,6 @@ export default function SoltarConAmor({ member, myId, treeId, onClose, mainAudio
           if (soltarAudioRef.current) soltarAudioRef.current.pause();
         });
       }
-      clearInterval(fadeTimerRef.current);
     };
   }, []);
 
