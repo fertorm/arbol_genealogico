@@ -242,7 +242,7 @@ export default function App(){
   const dragOffRef      = useRef({x:0,y:0});
   const isPanningRef    = useRef(false);
   const panStartRef     = useRef({x:0,y:0});
-  const touchStateRef   = useRef({mode:"idle",draggingId:null,dragOff:{x:0,y:0},panStart:{x:0,y:0},pinchDist:0,pinchMid:{x:0,y:0}});
+  const touchStateRef   = useRef({mode:"idle",draggingId:null,dragOff:{x:0,y:0},panStart:{x:0,y:0},pinchDist:0,pinchMid:{x:0,y:0},hasMoved:false,startX:0,startY:0});
 
   useEffect(()=>{treeIdRef.current=treeId;},[treeId]);
   useEffect(()=>{connTypeRef.current=connType;},[connType]);
@@ -255,15 +255,14 @@ export default function App(){
   // Bloquear zoom del browser en móvil
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
-    const pD=(e)=>e.preventDefault();
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pD,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
+    return()=>{document.removeEventListener("touchmove",pZ);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
   const handlePhotoFile=(file,cb)=>{if(!file)return;const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
-  const isMine=m=>!m.creator_id||m.creator_id===MY_ID;
+  // TEMP: cualquiera puede editar (restricción desactivada)
+  const isMine=m=>true;
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
 
@@ -525,18 +524,34 @@ export default function App(){
   },[onMouseMove,onMouseUp]);
 
   // ── Touch con RAF + inertia ───────────────────────────────────────────────
+  const isInteractive = (el) => {
+    const tags = ["BUTTON","INPUT","SELECT","TEXTAREA","A","LABEL"];
+    let node = el;
+    while (node) {
+      if (tags.includes(node.tagName)) return true;
+      if (node === document.body) break;
+      node = node.parentElement;
+    }
+    return false;
+  };
+
   const onTouchStartUnified=useCallback(e=>{
-    e.preventDefault();
+    if (isInteractive(e.target)) return;
+    // No llamamos preventDefault() en touchstart para no activar ghost-click suppression de iOS.
+    // El preventDefault() se aplica solo cuando hay movimiento real (en touchmove/touchend).
     stopInertia();
     const ts=touchStateRef.current;
+    ts.hasMoved=false;
     if(e.touches.length===2){
       ts.mode="pinch";ts.draggingId=null;
       ts.pinchDist=getTouchDist(e.touches[0],e.touches[1]);
       ts.pinchMid=getTouchMid(e.touches[0],e.touches[1]);
+      ts.startX=e.touches[0].clientX;ts.startY=e.touches[0].clientY;
       return;
     }
     if(e.touches.length===1){
       const t=e.touches[0];
+      ts.startX=t.clientX;ts.startY=t.clientY;
       const cardId=getCardIdFromElement(t.target);
       if(cardId){
         if(connectModeRef.current){
@@ -553,7 +568,11 @@ export default function App(){
         if(m&&isMine(m)&&!m.linked_tree_id){
           ts.mode="drag";ts.draggingId=cardId;
           ts.dragOff={x:t.clientX/zoomRef.current-m.x,y:t.clientY/zoomRef.current-m.y};
-        }else{ts.mode="idle";}
+        }else{
+          ts.mode="pan";
+          ts.panStart={x:t.clientX-panRef.current.x,y:t.clientY-panRef.current.y};
+          lastMovePanRef.current=panRef.current;lastMoveTimeRef.current=performance.now();
+        }
       }else{
         setSelected(null);
         if(connectModeRef.current){setConnectFirst(null);connectFirstRef.current=null;}
@@ -565,9 +584,11 @@ export default function App(){
   },[getCardIdFromElement,startInertia]);
 
   const onTouchMoveUnified=useCallback(e=>{
-    e.preventDefault();
     const ts=touchStateRef.current;
     if(e.touches.length===2&&ts.mode==="pinch"){
+      // Pinch siempre necesita preventDefault para evitar zoom nativo
+      e.preventDefault();
+      ts.hasMoved=true;
       const newDist=getTouchDist(e.touches[0],e.touches[1]);
       const newMid=getTouchMid(e.touches[0],e.touches[1]);
       const cvs=canvasRef.current;
@@ -588,11 +609,16 @@ export default function App(){
     }
     if(e.touches.length===1){
       const t=e.touches[0];
+      // Detectar movimiento real con umbral de 8px para distinguir tap de arrastre
+      const dist=Math.hypot(t.clientX-ts.startX,t.clientY-ts.startY);
+      if(dist>8) ts.hasMoved=true;
+      // Solo aplicar preventDefault cuando hay movimiento real (pan/drag activo)
+      if(ts.hasMoved) e.preventDefault();
       if(ts.mode==="drag"&&ts.draggingId){
         setMembers(p=>p.map(m=>m.id===ts.draggingId?{...m,x:t.clientX/zoomRef.current-ts.dragOff.x,y:t.clientY/zoomRef.current-ts.dragOff.y}:m));
         return;
       }
-      if(ts.mode==="pan"){
+      if(ts.mode==="pan"&&ts.hasMoved){
         const np={x:t.clientX-ts.panStart.x,y:t.clientY-ts.panStart.y};
         // Velocity tracking
         const now=performance.now(),dt=now-lastMoveTimeRef.current;
@@ -604,8 +630,9 @@ export default function App(){
   },[schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
-    e.preventDefault();
     const ts=touchStateRef.current;
+    // Solo prevenir click si hubo movimiento real (pan/drag), no en taps simples
+    if(ts.hasMoved) e.preventDefault();
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
       const t=e.changedTouches[0];
       updateMemberPos(ts.draggingId,t.clientX/zoomRef.current-ts.dragOff.x,t.clientY/zoomRef.current-ts.dragOff.y);
@@ -620,7 +647,7 @@ export default function App(){
   },[startInertia]);
 
   useEffect(()=>{
-    const el=wrapperRef.current;if(!el)return;
+    const el=canvasRef.current;if(!el)return;
     el.addEventListener("touchstart",onTouchStartUnified,{passive:false});
     el.addEventListener("touchmove",onTouchMoveUnified,{passive:false});
     el.addEventListener("touchend",onTouchEndUnified,{passive:false});
@@ -668,8 +695,8 @@ export default function App(){
 
   return(
     <>
-      <style>{`html,body{touch-action:none;overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
-      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none"}}>
+      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
+      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
 
@@ -856,10 +883,10 @@ export default function App(){
           ))}
         </div>
 
-        {/* D-pad */}
-        <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
+        {/* D-pad TEMP desactivado */}
+        {/* <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
           <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
-        </div>
+        </div> */}
 
         {/* Zoom */}
         <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
