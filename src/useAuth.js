@@ -18,7 +18,8 @@ export function useAuth() {
   const signInWithGoogle = () =>
     supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.href },
+      // Redirect back to current origin + path (without query params that could confuse OAuth)
+      options: { redirectTo: window.location.origin + window.location.pathname },
     });
 
   const signOut = () => supabase.auth.signOut();
