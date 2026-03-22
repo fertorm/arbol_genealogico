@@ -527,7 +527,8 @@ export default function App(){
 
   // ── Touch con RAF + inertia ───────────────────────────────────────────────
   const onTouchStartUnified=useCallback(e=>{
-    e.preventDefault();
+    // No preventDefault aquí: touch-action:none en canvasRef ya previene
+    // scroll/zoom del browser, y preventDefault suprime clicks en Android Chrome
     stopInertia();
     const ts=touchStateRef.current;
     if(e.touches.length===2){
@@ -605,7 +606,7 @@ export default function App(){
   },[schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
-    e.preventDefault();
+    // No preventDefault: dejar que Android Chrome sintetice el click event
     const ts=touchStateRef.current;
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
       const t=e.changedTouches[0];
