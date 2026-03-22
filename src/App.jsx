@@ -242,7 +242,7 @@ export default function App(){
   const dragOffRef      = useRef({x:0,y:0});
   const isPanningRef    = useRef(false);
   const panStartRef     = useRef({x:0,y:0});
-  const touchStateRef   = useRef({mode:"idle",draggingId:null,dragOff:{x:0,y:0},panStart:{x:0,y:0},pinchDist:0,pinchMid:{x:0,y:0}});
+  const touchStateRef   = useRef({mode:"idle",draggingId:null,dragOff:{x:0,y:0},panStart:{x:0,y:0},pinchDist:0,pinchMid:{x:0,y:0},hasMoved:false,startX:0,startY:0});
 
   useEffect(()=>{treeIdRef.current=treeId;},[treeId]);
   useEffect(()=>{connTypeRef.current=connType;},[connType]);
@@ -536,17 +536,21 @@ export default function App(){
 
   const onTouchStartUnified=useCallback(e=>{
     if (isInteractive(e.target)) return;
-    e.preventDefault();
+    // No llamamos preventDefault() en touchstart para no activar ghost-click suppression de iOS.
+    // El preventDefault() se aplica solo cuando hay movimiento real (en touchmove/touchend).
     stopInertia();
     const ts=touchStateRef.current;
+    ts.hasMoved=false;
     if(e.touches.length===2){
       ts.mode="pinch";ts.draggingId=null;
       ts.pinchDist=getTouchDist(e.touches[0],e.touches[1]);
       ts.pinchMid=getTouchMid(e.touches[0],e.touches[1]);
+      ts.startX=e.touches[0].clientX;ts.startY=e.touches[0].clientY;
       return;
     }
     if(e.touches.length===1){
       const t=e.touches[0];
+      ts.startX=t.clientX;ts.startY=t.clientY;
       const cardId=getCardIdFromElement(t.target);
       if(cardId){
         if(connectModeRef.current){
@@ -579,10 +583,11 @@ export default function App(){
   },[getCardIdFromElement,startInertia]);
 
   const onTouchMoveUnified=useCallback(e=>{
-    if (isInteractive(e.target)) return;
-    e.preventDefault();
     const ts=touchStateRef.current;
     if(e.touches.length===2&&ts.mode==="pinch"){
+      // Pinch siempre necesita preventDefault para evitar zoom nativo
+      e.preventDefault();
+      ts.hasMoved=true;
       const newDist=getTouchDist(e.touches[0],e.touches[1]);
       const newMid=getTouchMid(e.touches[0],e.touches[1]);
       const cvs=canvasRef.current;
@@ -603,11 +608,16 @@ export default function App(){
     }
     if(e.touches.length===1){
       const t=e.touches[0];
+      // Detectar movimiento real con umbral de 8px para distinguir tap de arrastre
+      const dist=Math.hypot(t.clientX-ts.startX,t.clientY-ts.startY);
+      if(dist>8) ts.hasMoved=true;
+      // Solo aplicar preventDefault cuando hay movimiento real (pan/drag activo)
+      if(ts.hasMoved) e.preventDefault();
       if(ts.mode==="drag"&&ts.draggingId){
         setMembers(p=>p.map(m=>m.id===ts.draggingId?{...m,x:t.clientX/zoomRef.current-ts.dragOff.x,y:t.clientY/zoomRef.current-ts.dragOff.y}:m));
         return;
       }
-      if(ts.mode==="pan"){
+      if(ts.mode==="pan"&&ts.hasMoved){
         const np={x:t.clientX-ts.panStart.x,y:t.clientY-ts.panStart.y};
         // Velocity tracking
         const now=performance.now(),dt=now-lastMoveTimeRef.current;
@@ -619,9 +629,9 @@ export default function App(){
   },[schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
-    if (isInteractive(e.target)) return;
-    e.preventDefault();
     const ts=touchStateRef.current;
+    // Solo prevenir click si hubo movimiento real (pan/drag), no en taps simples
+    if(ts.hasMoved) e.preventDefault();
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
       const t=e.changedTouches[0];
       updateMemberPos(ts.draggingId,t.clientX/zoomRef.current-ts.dragOff.x,t.clientY/zoomRef.current-ts.dragOff.y);
