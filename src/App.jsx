@@ -255,10 +255,9 @@ export default function App(){
   // Bloquear zoom del browser en móvil
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
-    const pD=(e)=>e.preventDefault();
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pD,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
+    document.addEventListener("touchstart",pZ,{passive:false});
+    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pZ);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
@@ -846,7 +845,7 @@ export default function App(){
         </div>
 
         {/* Barra generación */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",touchAction:"pan-x"}}>
           <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
           {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
             <button key={g} onClick={()=>setGenFilter(g)}
