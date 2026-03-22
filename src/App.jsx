@@ -255,9 +255,10 @@ export default function App(){
   // Bloquear zoom del browser en móvil
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
+    const pD=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pZ,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pZ);};
+    document.addEventListener("touchstart",pD,{passive:false});
+    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
@@ -524,7 +525,19 @@ export default function App(){
   },[onMouseMove,onMouseUp]);
 
   // ── Touch con RAF + inertia ───────────────────────────────────────────────
+  const isInteractive = (el) => {
+    const tags = ["BUTTON","INPUT","SELECT","TEXTAREA","A","LABEL"];
+    let node = el;
+    while (node) {
+      if (tags.includes(node.tagName)) return true;
+      if (node === document.body) break;
+      node = node.parentElement;
+    }
+    return false;
+  };
+
   const onTouchStartUnified=useCallback(e=>{
+    if (isInteractive(e.target)) return;
     e.preventDefault();
     stopInertia();
     const ts=touchStateRef.current;
@@ -845,7 +858,7 @@ export default function App(){
         </div>
 
         {/* Barra generación */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",touchAction:"pan-x"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
           <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
           {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
             <button key={g} onClick={()=>setGenFilter(g)}
