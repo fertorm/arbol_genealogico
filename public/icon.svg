@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#FFFFFF"/>
+
+  <!-- Connection lines between nodes -->
+  <!-- Root to left child -->
+  <line x1="256" y1="148" x2="148" y2="260" stroke="#4DB89E" stroke-width="8" stroke-linecap="round" opacity="0.7"/>
+  <!-- Root to right child -->
+  <line x1="256" y1="148" x2="364" y2="260" stroke="#4DB89E" stroke-width="8" stroke-linecap="round" opacity="0.7"/>
+  <!-- Left child to left-left grandchild -->
+  <line x1="148" y1="260" x2="96" y2="370" stroke="#C9A227" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  <!-- Left child to left-right grandchild -->
+  <line x1="148" y1="260" x2="200" y2="370" stroke="#C9A227" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  <!-- Right child to right-left grandchild -->
+  <line x1="364" y1="260" x2="312" y2="370" stroke="#C9A227" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  <!-- Right child to right-right grandchild -->
+  <line x1="364" y1="260" x2="416" y2="370" stroke="#C9A227" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Root node (gold) -->
+  <circle cx="256" cy="130" r="48" fill="#C9A227" opacity="0.95"/>
+  <circle cx="256" cy="130" r="48" fill="none" stroke="#3D2B00" stroke-width="3" opacity="0.3"/>
+  <!-- Root icon: crown/family symbol -->
+  <text x="256" y="145" text-anchor="middle" font-size="40" fill="#FFFFFF">👑</text>
+
+  <!-- Left child node (teal) -->
+  <circle cx="148" cy="268" r="38" fill="#4DB89E" opacity="0.9"/>
+  <circle cx="148" cy="268" r="38" fill="none" stroke="#3D2B00" stroke-width="2.5" opacity="0.25"/>
+  <text x="148" y="281" text-anchor="middle" font-size="30" fill="#FFFFFF">👤</text>
+
+  <!-- Right child node (teal) -->
+  <circle cx="364" cy="268" r="38" fill="#4DB89E" opacity="0.9"/>
+  <circle cx="364" cy="268" r="38" fill="none" stroke="#3D2B00" stroke-width="2.5" opacity="0.25"/>
+  <text x="364" y="281" text-anchor="middle" font-size="30" fill="#FFFFFF">👤</text>
+
+  <!-- Grandchild nodes (gold, smaller) -->
+  <circle cx="96" cy="374" r="28" fill="#C9A227" opacity="0.75"/>
+  <circle cx="200" cy="374" r="28" fill="#C9A227" opacity="0.75"/>
+  <circle cx="312" cy="374" r="28" fill="#C9A227" opacity="0.75"/>
+  <circle cx="416" cy="374" r="28" fill="#C9A227" opacity="0.75"/>
+
+  <!-- Dots in grandchild nodes -->
+  <circle cx="96" cy="374" r="8" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="200" cy="374" r="8" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="312" cy="374" r="8" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="416" cy="374" r="8" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- Text: "My" in gold -->
+  <text x="125" y="470" text-anchor="middle" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#C9A227">My</text>
+  <!-- Text: "Family" in dark brown -->
+  <text x="256" y="470" text-anchor="middle" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#3D2B00">Family</text>
+  <!-- Text: "Tree" in teal -->
+  <text x="387" y="470" text-anchor="middle" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#4DB89E">Tree</text>
+</svg>

@@ -4,16 +4,10 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import SoltarConAmor from "./SoltarConAmor";
 import NexusView from "./NexusView";
+import { useAuth } from './useAuth';
 
 const MUSIC_URL = "/musica.mp3";
 const PAN_STEP  = 120;
-
-function getMyId() {
-  let id = localStorage.getItem("arbol-my-id");
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem("arbol-my-id", id); }
-  return id;
-}
-const MY_ID = getMyId();
 
 function getRecentTrees() {
   try { return JSON.parse(localStorage.getItem("arbol-recent") || "[]"); } catch { return []; }
@@ -59,7 +53,7 @@ function clearTreeFromUrl(){const u=new URL(window.location);u.searchParams.dele
 function extractUUID(str){const m=str.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);return m?m[0]:null;}
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
-function HomeScreen({onOpen,onCreate}){
+function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
   const [recent,setRecent]=useState(getRecentTrees());
   const [joinId,setJoinId]=useState("");
   const [joining,setJoining]=useState(false);
@@ -114,6 +108,24 @@ function HomeScreen({onOpen,onCreate}){
           </div>
         )}
         <div style={{textAlign:"center",marginTop:20,fontSize:10,color:"rgba(93,58,26,0.3)"}}>Todo se guarda automáticamente en la nube ☁️</div>
+        {/* Google Auth */}
+        <div style={{marginTop:16,borderTop:"1px solid rgba(139,111,71,0.15)",paddingTop:16}}>
+          {user ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"rgba(91,123,111,0.08)",border:"1.5px solid rgba(91,123,111,0.2)",borderRadius:3}}>
+              <div>
+                <div style={{fontSize:11,color:"#3D6B5A",fontWeight:500,fontFamily:"'Jost',sans-serif"}}>✓ Conectado como</div>
+                <div style={{fontSize:12,color:"#2D1B0E",marginTop:2}}>{user.email}</div>
+              </div>
+              <button onClick={onSignOut} style={{padding:"6px 12px",background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:10,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase"}}>Salir</button>
+            </div>
+          ) : (
+            <button onClick={onSignIn}
+              style={{width:"100%",padding:"13px",background:"#FFF",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,fontFamily:"'Jost',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,color:"#3D2B1F"}}>
+              <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+              Iniciar sesión con Google
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -121,7 +133,7 @@ function HomeScreen({onOpen,onCreate}){
 
 // ── EditModal ─────────────────────────────────────────────────────────────────
 function EditModal({member,onSave,onClose,handlePhotoFile}){
-  const[form,setForm]=useState({name:member.name||"",role:member.role||"Otro",year:member.year||"",photo:member.photo||null});
+  const[form,setForm]=useState({name:member.name||"",role:member.role||"Otro",year:member.year||"",photo:member.photo||null,deceased:member.deceased||false,death_year:member.death_year||""});
   const[saving,setSaving]=useState(false);
   const handleSave=async()=>{if(!form.name.trim())return;setSaving(true);await onSave(member.id,form);setSaving(false);onClose();};
   return(
@@ -149,6 +161,22 @@ function EditModal({member,onSave,onClose,handlePhotoFile}){
             {el}
           </div>
         ))}
+        {/* Fallecido */}
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"#5D3A1A",fontFamily:"'Jost',sans-serif"}}>
+            <input type="checkbox"
+              checked={form.deceased||false}
+              onChange={e=>setForm(f=>({...f,deceased:e.target.checked}))}
+              style={{width:15,height:15,cursor:"pointer"}}/>
+            ✝ Persona fallecida
+          </label>
+        </div>
+        {form.deceased&&(
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Año de fallecimiento</label>
+            <input placeholder="Ej: 1998" value={form.death_year||''} onChange={e=>setForm(f=>({...f,death_year:e.target.value}))} style={{width:"100%",padding:"9px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"rgba(255,252,245,0.8)",fontSize:12,color:"#2D1B0E",fontFamily:"'Jost',sans-serif",boxSizing:"border-box",outline:"none"}}/>
+          </div>
+        )}
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto</label>
           <div onClick={()=>document.getElementById("edit-photo-inp").click()}
@@ -195,6 +223,15 @@ function DPad({onPan,onReset}){
 // APP PRINCIPAL
 // ════════════════════════════════════════════════════════════════════════════
 export default function App(){
+  const { user, signInWithGoogle, signOut } = useAuth();
+
+  // Effective ID: Google user.id if logged in, else legacy localStorage UUID
+  const MY_ID = user?.id ?? (() => {
+    let id = localStorage.getItem("arbol-my-id");
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem("arbol-my-id", id); }
+    return id;
+  })();
+
   const [screen,setScreen]           = useState("loading");
   const [members,setMembers]         = useState([]);
   const [connections,setConnections] = useState([]);
@@ -215,7 +252,9 @@ export default function App(){
   const [zoom,setZoom]               = useState(1);
   const [pan,setPan]                 = useState({x:0,y:0});
   const [genFilter,setGenFilter]     = useState("Todos");
-  const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:""});
+  const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:"",deceased:false,death_year:""});
+  const [myRole,setMyRole]           = useState('viewer'); // 'owner' | 'editor' | 'viewer'
+  const [showApproval,setShowApproval] = useState(false);
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -227,6 +266,7 @@ export default function App(){
   const panRef          = useRef({x:0,y:0});
   const canvasRef       = useRef(null);
   const audioRef        = useRef(null);   // música principal
+  const audioFadeRef    = useRef(null);   // interval id del fade de audio principal
   const wrapperRef      = useRef(null);
 
   // ── Feature 4: RAF + inertia refs ──────────────────────────────────────────
@@ -252,18 +292,17 @@ export default function App(){
   useEffect(()=>{zoomRef.current=zoom;},[zoom]);
   useEffect(()=>{panRef.current=pan;},[pan]);
 
-  // Bloquear zoom del browser en móvil
+  // Bloquear pinch-zoom del browser en móvil (solo multi-touch en touchmove)
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
-    const pD=(e)=>e.preventDefault();
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pD,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
+    return()=>{document.removeEventListener("touchmove",pZ);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
   const handlePhotoFile=(file,cb)=>{if(!file)return;const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
-  const isMine=m=>!m.creator_id||m.creator_id===MY_ID;
+  const isMine=m=>myRole==='owner'||(!m.creator_id||m.creator_id===MY_ID);
+  const canEdit=myRole==='owner'||myRole==='editor';
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
 
@@ -308,11 +347,12 @@ export default function App(){
   // ── Feature 2: Abrir/cerrar Soltar con fade de audio ──────────────────────
   const openSoltar = useCallback((m)=>{
     // Reducir música principal
+    if(audioFadeRef.current) clearInterval(audioFadeRef.current);
     if(audioRef.current && playing){
-      const fadeOut = setInterval(()=>{
-        if(!audioRef.current) return clearInterval(fadeOut);
+      audioFadeRef.current = setInterval(()=>{
+        if(!audioRef.current){clearInterval(audioFadeRef.current);return;}
         audioRef.current.volume = Math.max(0.04, audioRef.current.volume - 0.04);
-        if(audioRef.current.volume <= 0.04) clearInterval(fadeOut);
+        if(audioRef.current.volume <= 0.04) clearInterval(audioFadeRef.current);
       },80);
     }
     setSoltarMember(m);
@@ -320,11 +360,12 @@ export default function App(){
 
   const closeSoltar = useCallback(()=>{
     // Restaurar música principal
+    if(audioFadeRef.current) clearInterval(audioFadeRef.current);
     if(audioRef.current && playing){
-      const fadeIn = setInterval(()=>{
-        if(!audioRef.current) return clearInterval(fadeIn);
+      audioFadeRef.current = setInterval(()=>{
+        if(!audioRef.current){clearInterval(audioFadeRef.current);return;}
         audioRef.current.volume = Math.min(0.3, audioRef.current.volume + 0.03);
-        if(audioRef.current.volume >= 0.3) clearInterval(fadeIn);
+        if(audioRef.current.volume >= 0.3) clearInterval(audioFadeRef.current);
       },80);
     }
     setSoltarMember(null);
@@ -333,7 +374,23 @@ export default function App(){
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(()=>{
     const id=getTreeIdFromUrl();
-    if(id)openTree(id);else setScreen("home");
+    if(id){
+      openTree(id).then(async()=>{
+        const roleParam=new URLSearchParams(window.location.search).get('role');
+        if(roleParam==='editor'&&user?.id){
+          const{data:existing}=await supabase
+            .from('tree_roles')
+            .select('role')
+            .eq('tree_id',id)
+            .eq('user_id',user.id)
+            .single();
+          if(!existing){
+            await supabase.from('tree_roles').insert({tree_id:id,user_id:user.id,role:'editor'});
+            setMyRole('editor');
+          }
+        }
+      });
+    }else setScreen("home");
   },[]);
 
   const openTree=async(id)=>{
@@ -345,6 +402,38 @@ export default function App(){
     setTreeId(id);treeIdRef.current=id;
     setMembers(m||[]);membersRef.current=m||[];
     setConnections(c||[]);
+    // Load role for this tree
+    if (user?.id) {
+      const { data: roleRow } = await supabase
+        .from('tree_roles')
+        .select('role')
+        .eq('tree_id', id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (roleRow) {
+        setMyRole(roleRow.role);
+      } else {
+        // Check if they created members in this tree via old UUID
+        const legacyId = localStorage.getItem("arbol-my-id");
+        const { data: legacyMembers } = legacyId ? await supabase
+          .from('members')
+          .select('id')
+          .eq('tree_id', id)
+          .eq('creator_id', legacyId)
+          .limit(1) : { data: null };
+
+        if (legacyMembers && legacyMembers.length > 0) {
+          // Auto-claim as owner
+          await supabase.from('tree_roles').insert({ tree_id: id, user_id: user.id, role: 'owner' });
+          setMyRole('owner');
+        } else {
+          setMyRole('viewer');
+        }
+      }
+    } else {
+      setMyRole('viewer');
+    }
     setTreeIdInUrl(id);saveRecentTree(id,tree.name||"Mi Familia");
     setShowNexus(false);
     setScreen("tree");
@@ -353,6 +442,15 @@ export default function App(){
   const createTree=async()=>{
     setScreen("loading");
     const{data}=await supabase.from("trees").insert({name:"Mi Familia"}).select().single();
+    // Assign owner role if logged in
+    if (user?.id && data) {
+      await supabase.from('tree_roles').insert({
+        tree_id: data.id,
+        user_id: user.id,
+        role: 'owner',
+      });
+      setMyRole('owner');
+    }
     if(data)await openTree(data.id);else setScreen("home");
   };
 
@@ -397,21 +495,23 @@ export default function App(){
     if(form.isPortal){
       if(!form.linkedTreeName.trim()){showToast("Escribe un nombre para el portal");return;}
       const linkedId=extractUUID(form.linkedTreeUrl||"");
-      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.linkedTreeName.trim(),role:"Otro",linked_tree_id:linkedId||null,linked_tree_name:form.linkedTreeName.trim(),creator_id:MY_ID,...basePos}).select().single();
+      const status=myRole==='owner'?'approved':'pending';
+      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.linkedTreeName.trim(),role:"Otro",linked_tree_id:linkedId||null,linked_tree_name:form.linkedTreeName.trim(),creator_id:MY_ID,status,...basePos}).select().single();
       if(error){showToast("❌ Error: "+error.message);return;}
       if(data){setMembers(p=>[...p,data]);membersRef.current=[...membersRef.current,data];}
     }else{
       if(!form.name.trim())return;
-      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.name.trim(),role:form.role,photo:form.photo,year:form.year,creator_id:MY_ID,...basePos}).select().single();
+      const status=myRole==='owner'?'approved':'pending';
+      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.name.trim(),role:form.role,photo:form.photo,year:form.year,creator_id:MY_ID,status,deceased:form.deceased||false,death_year:form.death_year||null,...basePos}).select().single();
       if(error){showToast("❌ Error: "+error.message);return;}
       if(data){setMembers(p=>[...p,data]);membersRef.current=[...membersRef.current,data];}
     }
-    setForm({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:""});
+    setForm({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:"",deceased:false,death_year:""});
     setShowAddModal(false);
   };
 
   const saveMemberEdit=async(id,fields)=>{
-    const{error}=await supabase.from("members").update({name:fields.name.trim(),role:fields.role,year:fields.year,photo:fields.photo}).eq("id",id);
+    const{error}=await supabase.from("members").update({name:fields.name.trim(),role:fields.role,year:fields.year,photo:fields.photo,deceased:fields.deceased||false,death_year:fields.death_year||null}).eq("id",id);
     if(error){showToast("❌ Error: "+error.message);return;}
     setMembers(p=>p.map(m=>m.id===id?{...m,...fields,name:fields.name.trim()}:m));
     showToast("✓ Cambios guardados","#2D7A4F");
@@ -424,6 +524,16 @@ export default function App(){
     setMembers(p=>p.filter(x=>x.id!==id));
     setConnections(p=>p.filter(x=>x.from_id!==id&&x.to_id!==id));
     setSelected(null);
+  };
+
+  const approveMember=async(id)=>{
+    await supabase.from("members").update({status:'approved'}).eq("id",id);
+    setMembers(p=>p.map(m=>m.id===id?{...m,status:'approved'}:m));
+  };
+
+  const rejectMember=async(id)=>{
+    await supabase.from("members").update({status:'rejected'}).eq("id",id);
+    setMembers(p=>p.filter(m=>m.id!==id));
   };
 
   const removeConnection=async id=>{
@@ -526,7 +636,8 @@ export default function App(){
 
   // ── Touch con RAF + inertia ───────────────────────────────────────────────
   const onTouchStartUnified=useCallback(e=>{
-    e.preventDefault();
+    // No preventDefault aquí: touch-action:none en canvasRef ya previene
+    // scroll/zoom del browser, y preventDefault suprime clicks en Android Chrome
     stopInertia();
     const ts=touchStateRef.current;
     if(e.touches.length===2){
@@ -604,7 +715,7 @@ export default function App(){
   },[schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
-    e.preventDefault();
+    // No preventDefault: dejar que Android Chrome sintetice el click event
     const ts=touchStateRef.current;
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
       const t=e.changedTouches[0];
@@ -620,7 +731,7 @@ export default function App(){
   },[startInertia]);
 
   useEffect(()=>{
-    const el=wrapperRef.current;if(!el)return;
+    const el=canvasRef.current;if(!el)return;
     el.addEventListener("touchstart",onTouchStartUnified,{passive:false});
     el.addEventListener("touchmove",onTouchMoveUnified,{passive:false});
     el.addEventListener("touchend",onTouchEndUnified,{passive:false});
@@ -653,10 +764,15 @@ export default function App(){
         }).map(m=>m.id)
   ),[members,genFilter]);
 
+  const pendingMembers=members.filter(m=>m.status==='pending');
+
   const shareUrl=`${window.location.origin}${window.location.pathname}?tree=${treeId}`;
   const copyLink=()=>{navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
   const shareWhatsApp=()=>window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
   const shareEmail=()=>window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
+  const editorUrl=`${window.location.origin}${window.location.pathname}?tree=${treeId}&role=editor`;
+  const [copiedEditor,setCopiedEditor]=useState(false);
+  const copyEditorLink=()=>{navigator.clipboard.writeText(editorUrl);setCopiedEditor(true);setTimeout(()=>setCopiedEditor(false),2000);};
 
   if(screen==="loading")return(
     <div style={{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F0E8",fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(93,58,26,0.5)",letterSpacing:1}}>
@@ -664,12 +780,12 @@ export default function App(){
       🌳 Cargando...
     </div>
   );
-  if(screen==="home")return <HomeScreen onOpen={openTree} onCreate={createTree}/>;
+  if(screen==="home")return <HomeScreen onOpen={openTree} onCreate={createTree} user={user} onSignIn={signInWithGoogle} onSignOut={signOut}/>;
 
   return(
     <>
-      <style>{`html,body{touch-action:none;overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
-      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none"}}>
+      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}button,a,[role="button"]{touch-action:manipulation;}`}</style>
+      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
 
@@ -680,6 +796,10 @@ export default function App(){
             <div>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:300,color:"#3D2B1F",letterSpacing:1}}>Árbol <em style={{fontStyle:"italic",color:"#8B6F47"}}>Genealógico</em></div>
               <div style={{fontSize:10,color:"rgba(93,58,26,0.45)",marginTop:1}}>{members.length} personas · {connections.length} vínculos · <span style={{color:"#5B7B6F"}}>● en vivo</span></div>
+              {/* Role badge */}
+              {myRole==='owner'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#8B6A00",background:"rgba(201,162,39,0.15)",border:"1px solid rgba(201,162,39,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👑 Dueño</div>}
+              {myRole==='editor'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#3D6B5A",background:"rgba(77,184,158,0.12)",border:"1px solid rgba(77,184,158,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>✏️ Editor</div>}
+              {myRole==='viewer'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"rgba(93,58,26,0.45)",background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👁 Visitante</div>}
             </div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -697,10 +817,16 @@ export default function App(){
               <>
                 {/* Feature 3: Botón Nexus */}
                 <Btn onClick={()=>setShowNexus(true)} style={{borderColor:"rgba(212,160,23,0.4)",color:"#8B6A00"}}>🌐 Nexus</Btn>
-                <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>
+                {canEdit && <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>}
                 <Btn onClick={exportPDF} style={{borderColor:"rgba(139,111,71,0.4)",color:"#5D3A1A"}}>{exporting?"...":"↓ PDF"}</Btn>
+                {myRole==='owner'&&pendingMembers.length>0&&(
+                  <Btn onClick={()=>setShowApproval(true)}
+                    style={{borderColor:"rgba(212,160,23,0.5)",color:"#8B6A00",background:"rgba(212,160,23,0.08)"}}>
+                    🔔 Pendientes ({pendingMembers.length})
+                  </Btn>
+                )}
                 <Btn onClick={()=>setShowShare(true)} style={{borderColor:"rgba(91,123,111,0.4)",color:"#3D6B5A"}}>🔗 Compartir</Btn>
-                <Btn onClick={()=>setShowAddModal(true)} primary>+ Agregar</Btn>
+                {canEdit && <Btn onClick={()=>setShowAddModal(true)} primary>+ Agregar</Btn>}
               </>
             )}
           </div>
@@ -736,8 +862,11 @@ export default function App(){
             {/* Tarjetas */}
             {members.map(m=>{
               if(!visibleMemberIds.has(m.id))return null;
+              if(m.status==='rejected')return null;
               const isPortal=!!(m.linked_tree_id);
               const col=COLORS[m.role]||COLORS["Otro"],mine=isMine(m),isFirst=connectFirst===m.id;
+              const isPending=m.status==='pending';
+              const isDeceased=m.deceased===true;
 
               // ── Portal ──────────────────────────────────────────
               if(isPortal)return(
@@ -764,27 +893,39 @@ export default function App(){
               return(
                 <div key={m.id} data-cardid={m.id} onMouseDown={e=>onCardMouseDown(e,m.id)}
                   style={{position:"absolute",left:m.x,top:m.y,width:155,
-                    background:isFirst?"rgba(240,252,248,0.97)":"rgba(255,252,245,0.94)",
-                    border:`1.5px solid ${isFirst?"#5B7B6F":selected===m.id?(mine?"#8B6F47":"#B43C3C"):"rgba(139,111,71,0.2)"}`,
+                    background:isPending?"rgba(255,252,230,0.97)":isFirst?"rgba(240,252,248,0.97)":isDeceased?"rgba(240,238,235,0.94)":"rgba(255,252,245,0.94)",
+                    border:isPending?"2px dashed #D4A017":`1.5px solid ${isFirst?"#5B7B6F":selected===m.id?(mine?"#8B6F47":"#B43C3C"):isDeceased?"#6B6B6B":"rgba(139,111,71,0.2)"}`,
                     borderRadius:3,
                     boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.25),0 4px 20px rgba(93,58,26,0.1)":"0 3px 18px rgba(93,58,26,0.08)",
                     cursor:connectMode?"crosshair":(mine?"pointer":"default"),overflow:"hidden",touchAction:"none"}}>
 
                   {!mine&&<div style={{position:"absolute",top:5,right:5,zIndex:10,background:"rgba(255,252,245,0.9)",borderRadius:2,padding:"1px 5px",fontSize:9,color:"rgba(93,58,26,0.5)",border:"1px solid rgba(139,111,71,0.2)"}}>🔒</div>}
                   {isFirst&&<div style={{position:"absolute",top:5,left:5,zIndex:10,background:"#5B7B6F",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif"}}>① origen</div>}
+                  {isPending&&(
+                    <div style={{position:"absolute",top:5,left:5,zIndex:10,background:"#D4A017",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif"}}>⏳ pendiente</div>
+                  )}
 
                   {m.photo?(
-                    <div style={{width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                    <div style={{width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
                       <img src={m.photo} style={{maxWidth:"100%",maxHeight:"140px",width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none"}} draggable={false}/>
+                      {isDeceased&&(
+                        <div style={{position:"absolute",top:6,right:6,zIndex:10,fontSize:14,color:"#6B6B6B",textShadow:"0 1px 3px rgba(255,255,255,0.8)"}}>✝</div>
+                      )}
                     </div>
                   ):(
-                    <div style={{width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)"}}>👤</div>
+                    <div style={{width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)",position:"relative"}}>
+                      👤
+                      {isDeceased&&(
+                        <div style={{position:"absolute",top:6,right:6,zIndex:10,fontSize:14,color:"#6B6B6B",textShadow:"0 1px 3px rgba(255,255,255,0.8)"}}>✝</div>
+                      )}
+                    </div>
                   )}
 
                   <div style={{padding:"9px 11px 10px"}}>
                     <div style={{display:"inline-block",padding:"2px 6px",borderRadius:2,fontSize:8,fontWeight:500,letterSpacing:1,textTransform:"uppercase",color:col[1],background:col[0],marginBottom:5}}>{m.role}</div>
                     <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:400,color:"#2D1B0E",lineHeight:1.2}}>{m.name}</div>
                     {m.year&&<div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2}}>✦ {m.year}</div>}
+                    {isDeceased&&m.death_year&&<div style={{fontSize:10,color:"rgba(107,107,107,0.7)",marginTop:1}}>✝ {m.death_year}</div>}
                   </div>
 
                   {/* ── Botones: Feature 1 — Soltar visible para TODOS ── */}
@@ -844,136 +985,199 @@ export default function App(){
             </div>
           )}
         </div>
+      </div>{/* fin wrapperRef — canvas aislado */}
 
-        {/* Barra generación */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
-          <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
-          {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
-            <button key={g} onClick={()=>setGenFilter(g)}
-              style={{padding:"6px 13px",borderRadius:20,border:`1.5px solid ${genFilter===g?"#8B6F47":"rgba(139,111,71,0.25)"}`,background:genFilter===g?"#8B6F47":"transparent",color:genFilter===g?"#FFF8F0":"rgba(93,58,26,0.6)",fontFamily:"'Jost',sans-serif",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s"}}>
-              {g}
-            </button>
-          ))}
-        </div>
+      {/* ── UI overlay: fuera de wrapperRef para evitar bloqueo de taps en Android ── */}
 
-        {/* D-pad */}
-        <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
-          <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
-        </div>
-
-        {/* Zoom */}
-        <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
-          {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
-            <div key={l} onClick={fn} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)",touchAction:"none"}}>{l}</div>
-          ))}
-        </div>
-
-        {/* Música */}
-        <div onClick={toggleMusic} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s",touchAction:"none"}}>
-          {playing?"🔇":"🎵"}
-        </div>
-
-        {/* ── Modals ── */}
-        {editingMember&&(
-          <EditModal member={editingMember} onSave={saveMemberEdit} onClose={()=>setEditingMember(null)} handlePhotoFile={handlePhotoFile}/>
-        )}
-
-        {/* Feature 2: SoltarConAmor con puente de audio */}
-        {soltarMember&&(
-          <SoltarConAmor
-            member={soltarMember}
-            myId={MY_ID}
-            treeId={treeId}
-            onClose={closeSoltar}
-            mainAudioRef={audioRef}
-            mainPlaying={playing}
-          />
-        )}
-
-        {/* Feature 3: Nexus */}
-        {showNexus&&(
-          <NexusView
-            currentTreeId={treeId}
-            onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
-            onClose={()=>setShowNexus(false)}
-          />
-        )}
-
-        {/* Compartir */}
-        {showShare&&(
-          <div onClick={()=>setShowShare(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:8}}>Compartir árbol</div>
-              <div style={{fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6}}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
-              <div style={{padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{shareUrl}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-                <button onClick={copyLink} style={{padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center"}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
-                <button onClick={shareWhatsApp} style={{padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center"}}>💬 WhatsApp</button>
-                <button onClick={shareEmail} style={{padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center"}}>✉️ Email</button>
-              </div>
-              <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11}}>Cerrar</Btn>
-            </div>
-          </div>
-        )}
-
-        {/* Agregar */}
-        {showAddModal&&(
-          <div onClick={()=>setShowAddModal(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>Agregar al árbol</div>
-              <div style={{display:"flex",gap:6,marginBottom:18}}>
-                <button onClick={()=>setForm(f=>({...f,isPortal:false}))}
-                  style={{flex:1,padding:"9px 6px",border:`1.5px solid ${!form.isPortal?"#8B6F47":"rgba(139,111,71,0.25)"}`,borderRadius:2,background:!form.isPortal?"#8B6F47":"transparent",color:!form.isPortal?"#FFF8F0":"#8B6F47",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  👤 Persona
-                </button>
-                <button onClick={()=>setForm(f=>({...f,isPortal:true}))}
-                  style={{flex:1,padding:"9px 6px",border:`1.5px solid ${form.isPortal?"#D4A017":"rgba(212,160,23,0.3)"}`,borderRadius:2,background:form.isPortal?"#D4A017":"transparent",color:form.isPortal?"#FFF":"#8B6A00",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  🌳 Portal árbol
-                </button>
-              </div>
-              {!form.isPortal?(
-                <>
-                  {[{label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
-                    {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
-                    {label:"Año de nacimiento",el:<input placeholder="Ej: 1945" value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} style={iStyle}/>},
-                  ].map(({label,el})=>(
-                    <div key={label} style={{marginBottom:12}}>
-                      <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>{label}</label>
-                      {el}
-                    </div>
-                  ))}
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto (opcional)</label>
-                    <div onClick={()=>document.getElementById("mpi").click()} style={{width:"100%",height:90,border:"1.5px dashed rgba(139,111,71,0.35)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,color:"rgba(139,111,71,0.55)",overflow:"hidden",position:"relative",background:"rgba(245,240,232,0.5)"}}>
-                      {form.photo?<img src={form.photo} style={{maxWidth:"100%",maxHeight:"90px",objectFit:"contain"}}/>:"📷 Subir foto"}
-                    </div>
-                    <input id="mpi" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{handlePhotoFile(e.target.files[0],photo=>setForm(f=>({...f,photo})));e.target.value="";}}/>
-                  </div>
-                </>
-              ):(
-                <>
-                  <div style={{background:"rgba(255,248,200,0.5)",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:3,padding:"12px 14px",marginBottom:16,fontSize:11,color:"#6B5000",lineHeight:1.6}}>
-                    Crea una tarjeta dorada que al tocarla abrirá el árbol de otro familiar.
-                  </div>
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Nombre del portal</label>
-                    <input autoFocus placeholder="Ej: Familia Angulo Díaz" value={form.linkedTreeName} onChange={e=>setForm(f=>({...f,linkedTreeName:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
-                  </div>
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Link del árbol a vincular</label>
-                    <input placeholder="Pega aquí el link del otro árbol" value={form.linkedTreeUrl} onChange={e=>setForm(f=>({...f,linkedTreeUrl:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
-                    <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:4}}>Pide el link con el botón 🔗 Compartir del otro árbol</div>
-                  </div>
-                </>
-              )}
-              <div style={{display:"flex",gap:8,marginTop:18}}>
-                <Btn onClick={()=>setShowAddModal(false)} style={{flex:1,padding:11}}>Cancelar</Btn>
-                <Btn onClick={addMember} primary style={{flex:1,padding:11}}>Agregar ✦</Btn>
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Barra generación */}
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
+        <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
+        {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
+          <button key={g} onClick={()=>setGenFilter(g)}
+            style={{padding:"6px 13px",borderRadius:20,border:`1.5px solid ${genFilter===g?"#8B6F47":"rgba(139,111,71,0.25)"}`,background:genFilter===g?"#8B6F47":"transparent",color:genFilter===g?"#FFF8F0":"rgba(93,58,26,0.6)",fontFamily:"'Jost',sans-serif",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s"}}>
+            {g}
+          </button>
+        ))}
       </div>
+
+      {/* D-pad */}
+      <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
+        <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
+      </div>
+
+      {/* Zoom */}
+      <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
+        {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
+          <div key={l} onClick={fn} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)"}}>{l}</div>
+        ))}
+      </div>
+
+      {/* Música */}
+      <div onClick={toggleMusic} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s"}}>
+        {playing?"🔇":"🎵"}
+      </div>
+
+      {/* ── Modals ── */}
+      {editingMember&&(
+        <EditModal member={editingMember} onSave={saveMemberEdit} onClose={()=>setEditingMember(null)} handlePhotoFile={handlePhotoFile}/>
+      )}
+
+      {/* Feature 2: SoltarConAmor con puente de audio */}
+      {soltarMember&&(
+        <SoltarConAmor
+          member={soltarMember}
+          myId={MY_ID}
+          treeId={treeId}
+          onClose={closeSoltar}
+          mainAudioRef={audioRef}
+          mainPlaying={playing}
+        />
+      )}
+
+      {/* Feature 3: Nexus */}
+      {showNexus&&(
+        <NexusView
+          currentTreeId={treeId}
+          onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
+          onClose={()=>setShowNexus(false)}
+        />
+      )}
+
+      {/* Approval Modal */}
+      {showApproval&&(
+        <div onClick={()=>setShowApproval(false)}
+          style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"80vh",overflowY:"auto"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>
+              🔔 Cambios pendientes ({pendingMembers.length})
+            </div>
+            {pendingMembers.length===0?(
+              <div style={{fontSize:12,color:"rgba(93,58,26,0.45)",textAlign:"center",padding:"20px 0"}}>Sin cambios pendientes</div>
+            ):(
+              pendingMembers.map(m=>(
+                <div key={m.id}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid rgba(139,111,71,0.1)"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#2D1B0E"}}>{m.name}</div>
+                    <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2}}>{m.role}{m.year?` · ${m.year}`:''}</div>
+                  </div>
+                  <button onClick={()=>approveMember(m.id)}
+                    style={{padding:"7px 12px",background:"rgba(45,122,79,0.1)",border:"1.5px solid rgba(45,122,79,0.4)",borderRadius:2,fontSize:11,color:"#2D7A4F",cursor:"pointer",fontFamily:"'Jost',sans-serif",fontWeight:500}}>
+                    ✓ Aprobar
+                  </button>
+                  <button onClick={()=>rejectMember(m.id)}
+                    style={{padding:"7px 12px",background:"transparent",border:"1.5px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:11,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif"}}>
+                    ✕
+                  </button>
+                </div>
+              ))
+            )}
+            <Btn onClick={()=>setShowApproval(false)} style={{width:"100%",marginTop:16,padding:11}}>Cerrar</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Compartir */}
+      {showShare&&(
+        <div onClick={()=>setShowShare(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:8}}>Compartir árbol</div>
+            <div style={{fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6}}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
+            <div style={{padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{shareUrl}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              <button onClick={copyLink} style={{padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center"}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
+              <button onClick={shareWhatsApp} style={{padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center"}}>💬 WhatsApp</button>
+              <button onClick={shareEmail} style={{padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center"}}>✉️ Email</button>
+            </div>
+            {myRole==='owner'&&(
+              <div style={{marginTop:14,padding:"12px 14px",background:"rgba(77,184,158,0.06)",border:"1.5px solid rgba(77,184,158,0.25)",borderRadius:3}}>
+                <div style={{fontSize:10,letterSpacing:"1px",textTransform:"uppercase",color:"#3D6B5A",fontWeight:500,marginBottom:8,fontFamily:"'Jost',sans-serif"}}>✏️ Link de editor (requiere login Google)</div>
+                <div style={{padding:"8px 10px",background:"rgba(245,240,232,0.8)",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:8,fontSize:10,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{editorUrl}</div>
+                <button onClick={copyEditorLink}
+                  style={{padding:"8px 14px",background:copiedEditor?"rgba(45,122,79,0.1)":"rgba(77,184,158,0.1)",border:`1.5px solid ${copiedEditor?"rgba(45,122,79,0.4)":"rgba(77,184,158,0.4)"}`,borderRadius:2,fontSize:11,color:copiedEditor?"#2D7A4F":"#3D6B5A",cursor:"pointer",fontFamily:"'Jost',sans-serif",fontWeight:500}}>
+                  {copiedEditor?"✓ Copiado":"📋 Copiar link de editor"}
+                </button>
+              </div>
+            )}
+            <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11,marginTop:14}}>Cerrar</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Agregar */}
+      {showAddModal&&(
+        <div onClick={()=>setShowAddModal(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>Agregar al árbol</div>
+            <div style={{display:"flex",gap:6,marginBottom:18}}>
+              <button onClick={()=>setForm(f=>({...f,isPortal:false}))}
+                style={{flex:1,padding:"9px 6px",border:`1.5px solid ${!form.isPortal?"#8B6F47":"rgba(139,111,71,0.25)"}`,borderRadius:2,background:!form.isPortal?"#8B6F47":"transparent",color:!form.isPortal?"#FFF8F0":"#8B6F47",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
+                👤 Persona
+              </button>
+              <button onClick={()=>setForm(f=>({...f,isPortal:true}))}
+                style={{flex:1,padding:"9px 6px",border:`1.5px solid ${form.isPortal?"#D4A017":"rgba(212,160,23,0.3)"}`,borderRadius:2,background:form.isPortal?"#D4A017":"transparent",color:form.isPortal?"#FFF":"#8B6A00",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
+                🌳 Portal árbol
+              </button>
+            </div>
+            {!form.isPortal?(
+              <>
+                {[{label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
+                  {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
+                  {label:"Año de nacimiento",el:<input placeholder="Ej: 1945" value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} style={iStyle}/>},
+                ].map(({label,el})=>(
+                  <div key={label} style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>{label}</label>
+                    {el}
+                  </div>
+                ))}
+                {/* Fallecido */}
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"#5D3A1A",fontFamily:"'Jost',sans-serif"}}>
+                    <input type="checkbox"
+                      checked={form.deceased||false}
+                      onChange={e=>setForm(f=>({...f,deceased:e.target.checked}))}
+                      style={{width:15,height:15,cursor:"pointer"}}/>
+                    ✝ Persona fallecida
+                  </label>
+                </div>
+                {form.deceased&&(
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Año de fallecimiento</label>
+                    <input placeholder="Ej: 1998" value={form.death_year||''} onChange={e=>setForm(f=>({...f,death_year:e.target.value}))} style={{width:"100%",padding:"9px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"rgba(255,252,245,0.8)",fontSize:12,color:"#2D1B0E",fontFamily:"'Jost',sans-serif",boxSizing:"border-box",outline:"none"}}/>
+                  </div>
+                )}
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto (opcional)</label>
+                  <div onClick={()=>document.getElementById("mpi").click()} style={{width:"100%",height:90,border:"1.5px dashed rgba(139,111,71,0.35)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,color:"rgba(139,111,71,0.55)",overflow:"hidden",position:"relative",background:"rgba(245,240,232,0.5)"}}>
+                    {form.photo?<img src={form.photo} style={{maxWidth:"100%",maxHeight:"90px",objectFit:"contain"}}/>:"📷 Subir foto"}
+                  </div>
+                  <input id="mpi" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{handlePhotoFile(e.target.files[0],photo=>setForm(f=>({...f,photo})));e.target.value="";}}/>
+                </div>
+              </>
+            ):(
+              <>
+                <div style={{background:"rgba(255,248,200,0.5)",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:3,padding:"12px 14px",marginBottom:16,fontSize:11,color:"#6B5000",lineHeight:1.6}}>
+                  Crea una tarjeta dorada que al tocarla abrirá el árbol de otro familiar.
+                </div>
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Nombre del portal</label>
+                  <input autoFocus placeholder="Ej: Familia Angulo Díaz" value={form.linkedTreeName} onChange={e=>setForm(f=>({...f,linkedTreeName:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Link del árbol a vincular</label>
+                  <input placeholder="Pega aquí el link del otro árbol" value={form.linkedTreeUrl} onChange={e=>setForm(f=>({...f,linkedTreeUrl:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
+                  <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:4}}>Pide el link con el botón 🔗 Compartir del otro árbol</div>
+                </div>
+              </>
+            )}
+            <div style={{display:"flex",gap:8,marginTop:18}}>
+              <Btn onClick={()=>setShowAddModal(false)} style={{flex:1,padding:11}}>Cancelar</Btn>
+              <Btn onClick={addMember} primary style={{flex:1,padding:11}}>Agregar ✦</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
