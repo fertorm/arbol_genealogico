@@ -133,7 +133,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
 
 // ── EditModal ─────────────────────────────────────────────────────────────────
 function EditModal({member,onSave,onClose,handlePhotoFile}){
-  const[form,setForm]=useState({name:member.name||"",role:member.role||"Otro",year:member.year||"",photo:member.photo||null});
+  const[form,setForm]=useState({name:member.name||"",role:member.role||"Otro",year:member.year||"",photo:member.photo||null,deceased:member.deceased||false,death_year:member.death_year||""});
   const[saving,setSaving]=useState(false);
   const handleSave=async()=>{if(!form.name.trim())return;setSaving(true);await onSave(member.id,form);setSaving(false);onClose();};
   return(
@@ -161,6 +161,22 @@ function EditModal({member,onSave,onClose,handlePhotoFile}){
             {el}
           </div>
         ))}
+        {/* Fallecido */}
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"#5D3A1A",fontFamily:"'Jost',sans-serif"}}>
+            <input type="checkbox"
+              checked={form.deceased||false}
+              onChange={e=>setForm(f=>({...f,deceased:e.target.checked}))}
+              style={{width:15,height:15,cursor:"pointer"}}/>
+            ✝ Persona fallecida
+          </label>
+        </div>
+        {form.deceased&&(
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Año de fallecimiento</label>
+            <input placeholder="Ej: 1998" value={form.death_year||''} onChange={e=>setForm(f=>({...f,death_year:e.target.value}))} style={{width:"100%",padding:"9px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"rgba(255,252,245,0.8)",fontSize:12,color:"#2D1B0E",fontFamily:"'Jost',sans-serif",boxSizing:"border-box",outline:"none"}}/>
+          </div>
+        )}
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto</label>
           <div onClick={()=>document.getElementById("edit-photo-inp").click()}
@@ -236,8 +252,9 @@ export default function App(){
   const [zoom,setZoom]               = useState(1);
   const [pan,setPan]                 = useState({x:0,y:0});
   const [genFilter,setGenFilter]     = useState("Todos");
-  const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:""});
+  const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:"",deceased:false,death_year:""});
   const [myRole,setMyRole]           = useState('viewer'); // 'owner' | 'editor' | 'viewer'
+  const [showApproval,setShowApproval] = useState(false);
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -357,7 +374,23 @@ export default function App(){
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(()=>{
     const id=getTreeIdFromUrl();
-    if(id)openTree(id);else setScreen("home");
+    if(id){
+      openTree(id).then(async()=>{
+        const roleParam=new URLSearchParams(window.location.search).get('role');
+        if(roleParam==='editor'&&user?.id){
+          const{data:existing}=await supabase
+            .from('tree_roles')
+            .select('role')
+            .eq('tree_id',id)
+            .eq('user_id',user.id)
+            .single();
+          if(!existing){
+            await supabase.from('tree_roles').insert({tree_id:id,user_id:user.id,role:'editor'});
+            setMyRole('editor');
+          }
+        }
+      });
+    }else setScreen("home");
   },[]);
 
   const openTree=async(id)=>{
@@ -377,7 +410,27 @@ export default function App(){
         .eq('tree_id', id)
         .eq('user_id', user.id)
         .single();
-      setMyRole(roleRow?.role ?? 'viewer');
+
+      if (roleRow) {
+        setMyRole(roleRow.role);
+      } else {
+        // Check if they created members in this tree via old UUID
+        const legacyId = localStorage.getItem("arbol-my-id");
+        const { data: legacyMembers } = legacyId ? await supabase
+          .from('members')
+          .select('id')
+          .eq('tree_id', id)
+          .eq('creator_id', legacyId)
+          .limit(1) : { data: null };
+
+        if (legacyMembers && legacyMembers.length > 0) {
+          // Auto-claim as owner
+          await supabase.from('tree_roles').insert({ tree_id: id, user_id: user.id, role: 'owner' });
+          setMyRole('owner');
+        } else {
+          setMyRole('viewer');
+        }
+      }
     } else {
       setMyRole('viewer');
     }
@@ -442,21 +495,23 @@ export default function App(){
     if(form.isPortal){
       if(!form.linkedTreeName.trim()){showToast("Escribe un nombre para el portal");return;}
       const linkedId=extractUUID(form.linkedTreeUrl||"");
-      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.linkedTreeName.trim(),role:"Otro",linked_tree_id:linkedId||null,linked_tree_name:form.linkedTreeName.trim(),creator_id:MY_ID,...basePos}).select().single();
+      const status=myRole==='owner'?'approved':'pending';
+      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.linkedTreeName.trim(),role:"Otro",linked_tree_id:linkedId||null,linked_tree_name:form.linkedTreeName.trim(),creator_id:MY_ID,status,...basePos}).select().single();
       if(error){showToast("❌ Error: "+error.message);return;}
       if(data){setMembers(p=>[...p,data]);membersRef.current=[...membersRef.current,data];}
     }else{
       if(!form.name.trim())return;
-      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.name.trim(),role:form.role,photo:form.photo,year:form.year,creator_id:MY_ID,...basePos}).select().single();
+      const status=myRole==='owner'?'approved':'pending';
+      const{data,error}=await supabase.from("members").insert({tree_id:treeId,name:form.name.trim(),role:form.role,photo:form.photo,year:form.year,creator_id:MY_ID,status,deceased:form.deceased||false,death_year:form.death_year||null,...basePos}).select().single();
       if(error){showToast("❌ Error: "+error.message);return;}
       if(data){setMembers(p=>[...p,data]);membersRef.current=[...membersRef.current,data];}
     }
-    setForm({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:""});
+    setForm({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:"",deceased:false,death_year:""});
     setShowAddModal(false);
   };
 
   const saveMemberEdit=async(id,fields)=>{
-    const{error}=await supabase.from("members").update({name:fields.name.trim(),role:fields.role,year:fields.year,photo:fields.photo}).eq("id",id);
+    const{error}=await supabase.from("members").update({name:fields.name.trim(),role:fields.role,year:fields.year,photo:fields.photo,deceased:fields.deceased||false,death_year:fields.death_year||null}).eq("id",id);
     if(error){showToast("❌ Error: "+error.message);return;}
     setMembers(p=>p.map(m=>m.id===id?{...m,...fields,name:fields.name.trim()}:m));
     showToast("✓ Cambios guardados","#2D7A4F");
@@ -469,6 +524,16 @@ export default function App(){
     setMembers(p=>p.filter(x=>x.id!==id));
     setConnections(p=>p.filter(x=>x.from_id!==id&&x.to_id!==id));
     setSelected(null);
+  };
+
+  const approveMember=async(id)=>{
+    await supabase.from("members").update({status:'approved'}).eq("id",id);
+    setMembers(p=>p.map(m=>m.id===id?{...m,status:'approved'}:m));
+  };
+
+  const rejectMember=async(id)=>{
+    await supabase.from("members").update({status:'rejected'}).eq("id",id);
+    setMembers(p=>p.filter(m=>m.id!==id));
   };
 
   const removeConnection=async id=>{
@@ -699,10 +764,15 @@ export default function App(){
         }).map(m=>m.id)
   ),[members,genFilter]);
 
+  const pendingMembers=members.filter(m=>m.status==='pending');
+
   const shareUrl=`${window.location.origin}${window.location.pathname}?tree=${treeId}`;
   const copyLink=()=>{navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
   const shareWhatsApp=()=>window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
   const shareEmail=()=>window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
+  const editorUrl=`${window.location.origin}${window.location.pathname}?tree=${treeId}&role=editor`;
+  const [copiedEditor,setCopiedEditor]=useState(false);
+  const copyEditorLink=()=>{navigator.clipboard.writeText(editorUrl);setCopiedEditor(true);setTimeout(()=>setCopiedEditor(false),2000);};
 
   if(screen==="loading")return(
     <div style={{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F0E8",fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(93,58,26,0.5)",letterSpacing:1}}>
@@ -749,6 +819,12 @@ export default function App(){
                 <Btn onClick={()=>setShowNexus(true)} style={{borderColor:"rgba(212,160,23,0.4)",color:"#8B6A00"}}>🌐 Nexus</Btn>
                 {canEdit && <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>}
                 <Btn onClick={exportPDF} style={{borderColor:"rgba(139,111,71,0.4)",color:"#5D3A1A"}}>{exporting?"...":"↓ PDF"}</Btn>
+                {myRole==='owner'&&pendingMembers.length>0&&(
+                  <Btn onClick={()=>setShowApproval(true)}
+                    style={{borderColor:"rgba(212,160,23,0.5)",color:"#8B6A00",background:"rgba(212,160,23,0.08)"}}>
+                    🔔 Pendientes ({pendingMembers.length})
+                  </Btn>
+                )}
                 <Btn onClick={()=>setShowShare(true)} style={{borderColor:"rgba(91,123,111,0.4)",color:"#3D6B5A"}}>🔗 Compartir</Btn>
                 {canEdit && <Btn onClick={()=>setShowAddModal(true)} primary>+ Agregar</Btn>}
               </>
@@ -786,8 +862,11 @@ export default function App(){
             {/* Tarjetas */}
             {members.map(m=>{
               if(!visibleMemberIds.has(m.id))return null;
+              if(m.status==='rejected')return null;
               const isPortal=!!(m.linked_tree_id);
               const col=COLORS[m.role]||COLORS["Otro"],mine=isMine(m),isFirst=connectFirst===m.id;
+              const isPending=m.status==='pending';
+              const isDeceased=m.deceased===true;
 
               // ── Portal ──────────────────────────────────────────
               if(isPortal)return(
@@ -814,27 +893,39 @@ export default function App(){
               return(
                 <div key={m.id} data-cardid={m.id} onMouseDown={e=>onCardMouseDown(e,m.id)}
                   style={{position:"absolute",left:m.x,top:m.y,width:155,
-                    background:isFirst?"rgba(240,252,248,0.97)":"rgba(255,252,245,0.94)",
-                    border:`1.5px solid ${isFirst?"#5B7B6F":selected===m.id?(mine?"#8B6F47":"#B43C3C"):"rgba(139,111,71,0.2)"}`,
+                    background:isPending?"rgba(255,252,230,0.97)":isFirst?"rgba(240,252,248,0.97)":isDeceased?"rgba(240,238,235,0.94)":"rgba(255,252,245,0.94)",
+                    border:isPending?"2px dashed #D4A017":`1.5px solid ${isFirst?"#5B7B6F":selected===m.id?(mine?"#8B6F47":"#B43C3C"):isDeceased?"#6B6B6B":"rgba(139,111,71,0.2)"}`,
                     borderRadius:3,
                     boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.25),0 4px 20px rgba(93,58,26,0.1)":"0 3px 18px rgba(93,58,26,0.08)",
                     cursor:connectMode?"crosshair":(mine?"pointer":"default"),overflow:"hidden",touchAction:"none"}}>
 
                   {!mine&&<div style={{position:"absolute",top:5,right:5,zIndex:10,background:"rgba(255,252,245,0.9)",borderRadius:2,padding:"1px 5px",fontSize:9,color:"rgba(93,58,26,0.5)",border:"1px solid rgba(139,111,71,0.2)"}}>🔒</div>}
                   {isFirst&&<div style={{position:"absolute",top:5,left:5,zIndex:10,background:"#5B7B6F",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif"}}>① origen</div>}
+                  {isPending&&(
+                    <div style={{position:"absolute",top:5,left:5,zIndex:10,background:"#D4A017",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif"}}>⏳ pendiente</div>
+                  )}
 
                   {m.photo?(
-                    <div style={{width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                    <div style={{width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
                       <img src={m.photo} style={{maxWidth:"100%",maxHeight:"140px",width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none"}} draggable={false}/>
+                      {isDeceased&&(
+                        <div style={{position:"absolute",top:6,right:6,zIndex:10,fontSize:14,color:"#6B6B6B",textShadow:"0 1px 3px rgba(255,255,255,0.8)"}}>✝</div>
+                      )}
                     </div>
                   ):(
-                    <div style={{width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)"}}>👤</div>
+                    <div style={{width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)",position:"relative"}}>
+                      👤
+                      {isDeceased&&(
+                        <div style={{position:"absolute",top:6,right:6,zIndex:10,fontSize:14,color:"#6B6B6B",textShadow:"0 1px 3px rgba(255,255,255,0.8)"}}>✝</div>
+                      )}
+                    </div>
                   )}
 
                   <div style={{padding:"9px 11px 10px"}}>
                     <div style={{display:"inline-block",padding:"2px 6px",borderRadius:2,fontSize:8,fontWeight:500,letterSpacing:1,textTransform:"uppercase",color:col[1],background:col[0],marginBottom:5}}>{m.role}</div>
                     <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:400,color:"#2D1B0E",lineHeight:1.2}}>{m.name}</div>
                     {m.year&&<div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2}}>✦ {m.year}</div>}
+                    {isDeceased&&m.death_year&&<div style={{fontSize:10,color:"rgba(107,107,107,0.7)",marginTop:1}}>✝ {m.death_year}</div>}
                   </div>
 
                   {/* ── Botones: Feature 1 — Soltar visible para TODOS ── */}
@@ -952,6 +1043,41 @@ export default function App(){
         />
       )}
 
+      {/* Approval Modal */}
+      {showApproval&&(
+        <div onClick={()=>setShowApproval(false)}
+          style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"80vh",overflowY:"auto"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>
+              🔔 Cambios pendientes ({pendingMembers.length})
+            </div>
+            {pendingMembers.length===0?(
+              <div style={{fontSize:12,color:"rgba(93,58,26,0.45)",textAlign:"center",padding:"20px 0"}}>Sin cambios pendientes</div>
+            ):(
+              pendingMembers.map(m=>(
+                <div key={m.id}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid rgba(139,111,71,0.1)"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:"#2D1B0E"}}>{m.name}</div>
+                    <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2}}>{m.role}{m.year?` · ${m.year}`:''}</div>
+                  </div>
+                  <button onClick={()=>approveMember(m.id)}
+                    style={{padding:"7px 12px",background:"rgba(45,122,79,0.1)",border:"1.5px solid rgba(45,122,79,0.4)",borderRadius:2,fontSize:11,color:"#2D7A4F",cursor:"pointer",fontFamily:"'Jost',sans-serif",fontWeight:500}}>
+                    ✓ Aprobar
+                  </button>
+                  <button onClick={()=>rejectMember(m.id)}
+                    style={{padding:"7px 12px",background:"transparent",border:"1.5px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:11,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif"}}>
+                    ✕
+                  </button>
+                </div>
+              ))
+            )}
+            <Btn onClick={()=>setShowApproval(false)} style={{width:"100%",marginTop:16,padding:11}}>Cerrar</Btn>
+          </div>
+        </div>
+      )}
+
       {/* Compartir */}
       {showShare&&(
         <div onClick={()=>setShowShare(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
@@ -964,7 +1090,17 @@ export default function App(){
               <button onClick={shareWhatsApp} style={{padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center"}}>💬 WhatsApp</button>
               <button onClick={shareEmail} style={{padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center"}}>✉️ Email</button>
             </div>
-            <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11}}>Cerrar</Btn>
+            {myRole==='owner'&&(
+              <div style={{marginTop:14,padding:"12px 14px",background:"rgba(77,184,158,0.06)",border:"1.5px solid rgba(77,184,158,0.25)",borderRadius:3}}>
+                <div style={{fontSize:10,letterSpacing:"1px",textTransform:"uppercase",color:"#3D6B5A",fontWeight:500,marginBottom:8,fontFamily:"'Jost',sans-serif"}}>✏️ Link de editor (requiere login Google)</div>
+                <div style={{padding:"8px 10px",background:"rgba(245,240,232,0.8)",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:8,fontSize:10,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{editorUrl}</div>
+                <button onClick={copyEditorLink}
+                  style={{padding:"8px 14px",background:copiedEditor?"rgba(45,122,79,0.1)":"rgba(77,184,158,0.1)",border:`1.5px solid ${copiedEditor?"rgba(45,122,79,0.4)":"rgba(77,184,158,0.4)"}`,borderRadius:2,fontSize:11,color:copiedEditor?"#2D7A4F":"#3D6B5A",cursor:"pointer",fontFamily:"'Jost',sans-serif",fontWeight:500}}>
+                  {copiedEditor?"✓ Copiado":"📋 Copiar link de editor"}
+                </button>
+              </div>
+            )}
+            <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11,marginTop:14}}>Cerrar</Btn>
           </div>
         </div>
       )}
@@ -995,6 +1131,22 @@ export default function App(){
                     {el}
                   </div>
                 ))}
+                {/* Fallecido */}
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"#5D3A1A",fontFamily:"'Jost',sans-serif"}}>
+                    <input type="checkbox"
+                      checked={form.deceased||false}
+                      onChange={e=>setForm(f=>({...f,deceased:e.target.checked}))}
+                      style={{width:15,height:15,cursor:"pointer"}}/>
+                    ✝ Persona fallecida
+                  </label>
+                </div>
+                {form.deceased&&(
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Año de fallecimiento</label>
+                    <input placeholder="Ej: 1998" value={form.death_year||''} onChange={e=>setForm(f=>({...f,death_year:e.target.value}))} style={{width:"100%",padding:"9px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"rgba(255,252,245,0.8)",fontSize:12,color:"#2D1B0E",fontFamily:"'Jost',sans-serif",boxSizing:"border-box",outline:"none"}}/>
+                  </div>
+                )}
                 <div style={{marginBottom:12}}>
                   <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto (opcional)</label>
                   <div onClick={()=>document.getElementById("mpi").click()} style={{width:"100%",height:90,border:"1.5px dashed rgba(139,111,71,0.35)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,color:"rgba(139,111,71,0.55)",overflow:"hidden",position:"relative",background:"rgba(245,240,232,0.5)"}}>
