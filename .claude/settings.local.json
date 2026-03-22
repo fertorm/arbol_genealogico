@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Skill(commit-commands:commit-push-pr)",
-      "Skill(commit-commands:commit-push-pr:*)"
+      "Skill(commit-commands:commit-push-pr:*)",
+      "Bash(node --input-type=module --eval \"import\\(''''./src/App.jsx''''\\)\")",
+      "Bash(npx --yes tsc --noEmit --allowJs --checkJs false)"
     ]
   }
 }
