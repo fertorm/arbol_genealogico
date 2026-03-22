@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "./supabase";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import SoltarConAmor from "./SoltarConAmor";
 
 const MUSIC_URL = "/musica.mp3";
 const PAN_STEP = 120;
@@ -92,7 +93,9 @@ function HomeScreen({ onOpen, onCreate }) {
       <div style={{ width:"100%",maxWidth:480 }}>
         <div style={{ textAlign:"center",marginBottom:36 }}>
           <div style={{ fontSize:48,marginBottom:10 }}>🌳</div>
-          <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:32,fontWeight:300,color:"#3D2B1F",letterSpacing:1 }}>Árbol <em style={{ fontStyle:"italic",color:"#8B6F47" }}>Genealógico</em></div>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:32,fontWeight:300,color:"#3D2B1F",letterSpacing:1 }}>
+            Árbol <em style={{ fontStyle:"italic",color:"#8B6F47" }}>Genealógico</em>
+          </div>
           <div style={{ fontSize:12,color:"rgba(93,58,26,0.45)",marginTop:6 }}>Conecta tu historia familiar</div>
         </div>
         <button onClick={onCreate} style={{ width:"100%",padding:"16px",background:"#5D3A1A",color:"#FFF8F0",border:"none",borderRadius:3,fontFamily:"'Jost',sans-serif",fontSize:13,fontWeight:500,letterSpacing:"1.5px",textTransform:"uppercase",cursor:"pointer",marginBottom:14 }}>
@@ -160,7 +163,8 @@ function EditModal({ member, onSave, onClose, handlePhotoFile }) {
         </div>
         <input id="edit-photo-inp" type="file" accept="image/*" style={{ display:"none" }}
           onChange={e=>{ handlePhotoFile(e.target.files[0],photo=>setForm(f=>({...f,photo}))); e.target.value=""; }}/>
-        {[{label:"Nombre completo",el:<input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleSave()} placeholder="Nombre completo" style={iStyle}/>},
+        {[
+          {label:"Nombre completo",el:<input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleSave()} placeholder="Nombre completo" style={iStyle}/>},
           {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
           {label:"Año de nacimiento",el:<input value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} placeholder="Ej: 1945" style={iStyle}/>},
         ].map(({label,el})=>(
@@ -222,6 +226,7 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [soltarMember, setSoltarMember] = useState(null);   // ← SOLTAR CON AMOR
   const [copied, setCopied] = useState(false);
   const [connectMode, setConnectMode] = useState(false);
   const [connectFirst, setConnectFirst] = useState(null);
@@ -234,7 +239,7 @@ export default function App() {
   const [genFilter, setGenFilter] = useState("Todos");
   const [form, setForm] = useState({ name:"", role:"Padre/Madre", photo:null, year:"", isPortal:false, linkedTreeUrl:"", linkedTreeName:"" });
 
-  // ── Refs ──────────────────────────────────────────────────────
+  // Refs
   const treeIdRef        = useRef(null);
   const connTypeRef      = useRef("padre-hijo");
   const connectFirstRef  = useRef(null);
@@ -242,25 +247,14 @@ export default function App() {
   const membersRef       = useRef([]);
   const zoomRef          = useRef(1);
   const panRef           = useRef({ x:0, y:0 });
-
-  // Drag (mouse)
   const draggingRef      = useRef(null);
   const dragOffRef       = useRef({ x:0, y:0 });
   const isPanningRef     = useRef(false);
   const panStartRef      = useRef({ x:0, y:0 });
-
-  // Touch state — un único objeto para gestionar todo el estado touch
-  const touchStateRef = useRef({
-    mode: "idle",        // "idle" | "pan" | "pinch" | "drag"
-    draggingId: null,
-    dragOff: { x:0, y:0 },
-    panStart: { x:0, y:0 },
-    pinchDist: 0,
-    pinchMid: { x:0, y:0 },
-  });
-
-  const canvasRef   = useRef(null);
-  const audioRef    = useRef(null);
+  const touchStateRef    = useRef({ mode:"idle", draggingId:null, dragOff:{x:0,y:0}, panStart:{x:0,y:0}, pinchDist:0, pinchMid:{x:0,y:0} });
+  const canvasRef        = useRef(null);
+  const audioRef         = useRef(null);
+  const wrapperRef       = useRef(null);
 
   useEffect(() => { treeIdRef.current = treeId; }, [treeId]);
   useEffect(() => { connTypeRef.current = connType; }, [connType]);
@@ -270,9 +264,8 @@ export default function App() {
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { panRef.current = pan; }, [pan]);
 
-  // ── Bloquear zoom del browser en iOS/Android ──────────────────
+  // Bloquear zoom browser en móvil
   useEffect(() => {
-    // Prevenir zoom del browser con doble tap y pinch en toda la página
     const preventZoom = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };
     const preventDblTap = (e) => e.preventDefault();
     document.addEventListener("touchmove", preventZoom, { passive: false });
@@ -286,9 +279,8 @@ export default function App() {
   const showToast = (msg, color="#B43C3C") => { setToast({msg,color}); setTimeout(()=>setToast(null),3000); };
   const handlePhotoFile = (file, cb) => { if(!file)return; const r=new FileReader(); r.onload=e=>cb(e.target.result); r.readAsDataURL(file); };
   const isMine = m => !m.creator_id || m.creator_id === MY_ID;
-
-  const getTouchDist = (a, b) => { const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY; return Math.sqrt(dx*dx+dy*dy); };
-  const getTouchMid  = (a, b) => ({ x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2 });
+  const getTouchDist = (a,b) => { const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY; return Math.sqrt(dx*dx+dy*dy); };
+  const getTouchMid  = (a,b) => ({ x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2 });
 
   // ── Init ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -428,7 +420,16 @@ export default function App() {
     }));
   };
 
-  // ── MOUSE events ──────────────────────────────────────────────
+  // ── Mouse ──────────────────────────────────────────────────────
+  const getCardIdFromElement = useCallback((el) => {
+    let node = el;
+    while (node && node !== canvasRef.current) {
+      if (node.dataset && node.dataset.cardid) return node.dataset.cardid;
+      node = node.parentElement;
+    }
+    return null;
+  }, []);
+
   const startCardDrag = useCallback((id, clientX, clientY) => {
     if(connectModeRef.current){
       const first=connectFirstRef.current;
@@ -481,201 +482,124 @@ export default function App() {
     return ()=>{ window.removeEventListener("mousemove",onMouseMove); window.removeEventListener("mouseup",onMouseUp); };
   }, [onMouseMove,onMouseUp]);
 
-  // ══════════════════════════════════════════════════════════════
-  // TOUCH EVENTS — reescrito completamente para móvil
-  // Estrategia: un único handler centralizado en el wrapper
-  // que distingue pan (1 dedo en fondo) / pinch (2 dedos) /
-  // drag tarjeta (1 dedo en tarjeta)
-  // ══════════════════════════════════════════════════════════════
-
-  // Detecta si el elemento tocado es una tarjeta y retorna su id
-  const getCardIdFromElement = useCallback((el) => {
-    let node = el;
-    while (node && node !== canvasRef.current) {
-      if (node.dataset && node.dataset.cardid) return node.dataset.cardid;
-      node = node.parentElement;
-    }
-    return null;
-  }, []);
-
+  // ── Touch ─────────────────────────────────────────────────────
   const onTouchStartUnified = useCallback((e) => {
-    // Siempre prevenir comportamiento por defecto del browser
     e.preventDefault();
-
     const ts = touchStateRef.current;
-
-    if (e.touches.length === 2) {
-      // ── PINCH ──
-      ts.mode = "pinch";
-      ts.draggingId = null;
-      ts.pinchDist = getTouchDist(e.touches[0], e.touches[1]);
-      ts.pinchMid  = getTouchMid(e.touches[0], e.touches[1]);
+    if(e.touches.length===2){
+      ts.mode="pinch"; ts.draggingId=null;
+      ts.pinchDist=getTouchDist(e.touches[0],e.touches[1]);
+      ts.pinchMid=getTouchMid(e.touches[0],e.touches[1]);
       return;
     }
-
-    if (e.touches.length === 1) {
-      const t = e.touches[0];
-      const cardId = getCardIdFromElement(t.target);
-
-      if (cardId) {
-        // ── INTERACCIÓN CON TARJETA ──
-        if (connectModeRef.current) {
-          const first = connectFirstRef.current;
-          if (!first) { setConnectFirst(cardId); connectFirstRef.current = cardId; return; }
-          if (first === cardId) { setConnectFirst(null); connectFirstRef.current = null; return; }
-          connectMembers(first, cardId);
-          setConnectFirst(null); connectFirstRef.current = null;
-          setConnectMode(false); connectModeRef.current = false;
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      const cardId=getCardIdFromElement(t.target);
+      if(cardId){
+        if(connectModeRef.current){
+          const first=connectFirstRef.current;
+          if(!first){ setConnectFirst(cardId); connectFirstRef.current=cardId; return; }
+          if(first===cardId){ setConnectFirst(null); connectFirstRef.current=null; return; }
+          connectMembers(first,cardId);
+          setConnectFirst(null); connectFirstRef.current=null;
+          setConnectMode(false); connectModeRef.current=false;
           return;
         }
-        const m = membersRef.current.find(x => x.id === cardId);
+        const m=membersRef.current.find(x=>x.id===cardId);
         setSelected(cardId);
-        if (m && isMine(m) && !m.linked_tree_id) {
-          ts.mode = "drag";
-          ts.draggingId = cardId;
-          ts.dragOff = {
-            x: t.clientX / zoomRef.current - m.x,
-            y: t.clientY / zoomRef.current - m.y,
-          };
-        } else {
-          ts.mode = "idle";
-        }
+        if(m&&isMine(m)&&!m.linked_tree_id){
+          ts.mode="drag"; ts.draggingId=cardId;
+          ts.dragOff={ x:t.clientX/zoomRef.current-m.x, y:t.clientY/zoomRef.current-m.y };
+        } else { ts.mode="idle"; }
       } else {
-        // ── PAN DEL CANVAS ──
         setSelected(null);
-        if (connectModeRef.current) { setConnectFirst(null); connectFirstRef.current = null; }
-        ts.mode = "pan";
-        ts.panStart = {
-          x: t.clientX - panRef.current.x,
-          y: t.clientY - panRef.current.y,
-        };
+        if(connectModeRef.current){ setConnectFirst(null); connectFirstRef.current=null; }
+        ts.mode="pan";
+        ts.panStart={ x:t.clientX-panRef.current.x, y:t.clientY-panRef.current.y };
       }
     }
   }, [getCardIdFromElement]);
 
   const onTouchMoveUnified = useCallback((e) => {
     e.preventDefault();
-    const ts = touchStateRef.current;
-
-    if (e.touches.length === 2 && ts.mode === "pinch") {
-      const newDist = getTouchDist(e.touches[0], e.touches[1]);
-      const newMid  = getTouchMid(e.touches[0], e.touches[1]);
-      const cvs = canvasRef.current;
-
-      if (ts.pinchDist > 0 && cvs) {
-        const scale    = newDist / ts.pinchDist;
-        const oldZoom  = zoomRef.current;
-        const newZoom  = Math.min(3, Math.max(0.2, oldZoom * scale));
-
-        // Zoom centrado en el punto medio del pellizco
-        const rect  = cvs.getBoundingClientRect();
-        const mx    = newMid.x - rect.left;
-        const my    = newMid.y - rect.top;
-        const wx    = (mx - panRef.current.x) / oldZoom;
-        const wy    = (my - panRef.current.y) / oldZoom;
-        const newPx = mx - wx * newZoom;
-        const newPy = my - wy * newZoom;
-
-        // Además trasladar por el movimiento del punto medio (pan simultáneo)
-        const dx = newMid.x - ts.pinchMid.x;
-        const dy = newMid.y - ts.pinchMid.y;
-
+    const ts=touchStateRef.current;
+    if(e.touches.length===2&&ts.mode==="pinch"){
+      const newDist=getTouchDist(e.touches[0],e.touches[1]);
+      const newMid=getTouchMid(e.touches[0],e.touches[1]);
+      const cvs=canvasRef.current;
+      if(ts.pinchDist>0&&cvs){
+        const scale=newDist/ts.pinchDist;
+        const oldZoom=zoomRef.current;
+        const newZoom=Math.min(3,Math.max(0.2,oldZoom*scale));
+        const rect=cvs.getBoundingClientRect();
+        const mx=newMid.x-rect.left, my=newMid.y-rect.top;
+        const wx=(mx-panRef.current.x)/oldZoom, wy=(my-panRef.current.y)/oldZoom;
+        const dx=newMid.x-ts.pinchMid.x, dy=newMid.y-ts.pinchMid.y;
         setZoom(newZoom);
-        setPan({ x: newPx + dx, y: newPy + dy });
+        setPan({ x:(mx-wx*newZoom)+dx, y:(my-wy*newZoom)+dy });
       }
-
-      ts.pinchDist = newDist;
-      ts.pinchMid  = newMid;
+      ts.pinchDist=newDist; ts.pinchMid=newMid;
       return;
     }
-
-    if (e.touches.length === 1) {
-      const t = e.touches[0];
-
-      if (ts.mode === "drag" && ts.draggingId) {
-        const nx = t.clientX / zoomRef.current - ts.dragOff.x;
-        const ny = t.clientY / zoomRef.current - ts.dragOff.y;
-        setMembers(p => p.map(m => m.id === ts.draggingId ? {...m,x:nx,y:ny} : m));
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      if(ts.mode==="drag"&&ts.draggingId){
+        setMembers(p=>p.map(m=>m.id===ts.draggingId?{...m,x:t.clientX/zoomRef.current-ts.dragOff.x,y:t.clientY/zoomRef.current-ts.dragOff.y}:m));
         return;
       }
-
-      if (ts.mode === "pan") {
-        setPan({
-          x: t.clientX - ts.panStart.x,
-          y: t.clientY - ts.panStart.y,
-        });
-      }
+      if(ts.mode==="pan") setPan({ x:t.clientX-ts.panStart.x, y:t.clientY-ts.panStart.y });
     }
   }, []);
 
   const onTouchEndUnified = useCallback((e) => {
     e.preventDefault();
-    const ts = touchStateRef.current;
-
-    if (ts.mode === "drag" && ts.draggingId) {
-      if (e.changedTouches.length > 0) {
-        const t = e.changedTouches[0];
-        updateMemberPos(
-          ts.draggingId,
-          t.clientX / zoomRef.current - ts.dragOff.x,
-          t.clientY / zoomRef.current - ts.dragOff.y
-        );
-      }
+    const ts=touchStateRef.current;
+    if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
+      const t=e.changedTouches[0];
+      updateMemberPos(ts.draggingId,t.clientX/zoomRef.current-ts.dragOff.x,t.clientY/zoomRef.current-ts.dragOff.y);
     }
-
-    // Si quedan 2 dedos → pasar a pan con el que queda
-    if (e.touches.length === 1) {
-      ts.mode = "pan";
-      ts.draggingId = null;
-      ts.panStart = {
-        x: e.touches[0].clientX - panRef.current.x,
-        y: e.touches[0].clientY - panRef.current.y,
-      };
+    if(e.touches.length===1){
+      ts.mode="pan"; ts.draggingId=null;
+      ts.panStart={ x:e.touches[0].clientX-panRef.current.x, y:e.touches[0].clientY-panRef.current.y };
       return;
     }
-
-    ts.mode = "idle";
-    ts.draggingId = null;
-    ts.pinchDist = 0;
+    ts.mode="idle"; ts.draggingId=null; ts.pinchDist=0;
   }, []);
 
-  // Registrar en el wrapper externo para capturar TODO el touch
-  const wrapperRef = useRef(null);
-  useEffect(() => {
-    const el = wrapperRef.current; if (!el) return;
-    el.addEventListener("touchstart",  onTouchStartUnified, { passive: false });
-    el.addEventListener("touchmove",   onTouchMoveUnified,  { passive: false });
-    el.addEventListener("touchend",    onTouchEndUnified,   { passive: false });
-    el.addEventListener("touchcancel", onTouchEndUnified,   { passive: false });
-    return () => {
-      el.removeEventListener("touchstart",  onTouchStartUnified);
-      el.removeEventListener("touchmove",   onTouchMoveUnified);
-      el.removeEventListener("touchend",    onTouchEndUnified);
-      el.removeEventListener("touchcancel", onTouchEndUnified);
+  useEffect(()=>{
+    const el=wrapperRef.current; if(!el)return;
+    el.addEventListener("touchstart",onTouchStartUnified,{passive:false});
+    el.addEventListener("touchmove",onTouchMoveUnified,{passive:false});
+    el.addEventListener("touchend",onTouchEndUnified,{passive:false});
+    el.addEventListener("touchcancel",onTouchEndUnified,{passive:false});
+    return()=>{
+      el.removeEventListener("touchstart",onTouchStartUnified);
+      el.removeEventListener("touchmove",onTouchMoveUnified);
+      el.removeEventListener("touchend",onTouchEndUnified);
+      el.removeEventListener("touchcancel",onTouchEndUnified);
     };
-  }, [onTouchStartUnified, onTouchMoveUnified, onTouchEndUnified]);
+  },[onTouchStartUnified,onTouchMoveUnified,onTouchEndUnified]);
 
-  const toggleMusic = e => {
+  const toggleMusic=e=>{
     e.stopPropagation();
     if(!audioRef.current)return;
     if(!playing){audioRef.current.volume=0.3;audioRef.current.play().then(()=>setPlaying(true)).catch(()=>{});}
     else{audioRef.current.pause();setPlaying(false);}
   };
 
-  // ── Filtro generación ─────────────────────────────────────────
   const visibleMemberIds = new Set(
-    genFilter === "Todos"
-      ? members.map(m => m.id)
-      : members.filter(m => {
-          if (m.linked_tree_id) return true;
-          return (GENERATION_ROLES[genFilter] || []).includes(m.role);
-        }).map(m => m.id)
+    genFilter==="Todos"
+      ? members.map(m=>m.id)
+      : members.filter(m=>{
+          if(m.linked_tree_id) return true;
+          return (GENERATION_ROLES[genFilter]||[]).includes(m.role);
+        }).map(m=>m.id)
   );
 
-  const shareUrl = `${window.location.origin}${window.location.pathname}?tree=${treeId}`;
-  const copyLink = ()=>{navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
-  const shareWhatsApp = ()=>window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
-  const shareEmail = ()=>window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
+  const shareUrl=`${window.location.origin}${window.location.pathname}?tree=${treeId}`;
+  const copyLink=()=>{navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
+  const shareWhatsApp=()=>window.open(`https://wa.me/?text=${encodeURIComponent("🌳 Te invito a ver y editar nuestro árbol genealógico familiar:\n"+shareUrl)}`,"_blank");
+  const shareEmail=()=>window.open(`mailto:?subject=${encodeURIComponent("Árbol Genealógico Familiar")}&body=${encodeURIComponent("Hola!\n\nTe comparto el árbol genealógico familiar:\n\n"+shareUrl+"\n\nSaludos!")}`,"_blank");
 
   if(screen==="loading") return(
     <div style={{ width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F0E8",fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(93,58,26,0.5)",letterSpacing:1 }}>
@@ -687,19 +611,15 @@ export default function App() {
 
   return(
     <>
-      {/* ── Global styles: bloquear zoom browser en móvil ── */}
       <style>{`
-        html, body { touch-action: none; overflow: hidden; overscroll-behavior: none; }
-        * { -webkit-tap-highlight-color: transparent; }
+        html,body{touch-action:none;overflow:hidden;overscroll-behavior:none;}
+        *{-webkit-tap-highlight-color:transparent;}
       `}</style>
-
-      <div
-        ref={wrapperRef}
-        style={{ width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none" }}>
+      <div ref={wrapperRef} style={{ width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none" }}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{ display:"none" }}/>
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"rgba(245,240,232,0.92)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(139,111,71,0.15)",flexShrink:0,gap:8,flexWrap:"wrap" }}>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             <button onClick={goHome} style={{ padding:"6px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"transparent",color:"rgba(93,58,26,0.5)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer" }}>← Inicio</button>
@@ -730,11 +650,9 @@ export default function App() {
           </div>
         </div>
 
-        {/* ── Canvas ── */}
-        <div ref={canvasRef}
-          style={{ flex:1,position:"relative",overflow:"hidden",cursor:"grab",touchAction:"none" }}
-          onMouseDown={onCanvasMouseDown}
-          onWheel={onWheel}>
+        {/* Canvas */}
+        <div ref={canvasRef} style={{ flex:1,position:"relative",overflow:"hidden",cursor:"grab",touchAction:"none" }}
+          onMouseDown={onCanvasMouseDown} onWheel={onWheel}>
           <div style={{ position:"absolute",top:0,left:0,transformOrigin:"0 0",transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
 
             {/* Líneas */}
@@ -759,12 +677,13 @@ export default function App() {
               })}
             </svg>
 
-            {/* Tarjetas — data-cardid para detección touch */}
+            {/* Tarjetas */}
             {members.map(m=>{
               if(!visibleMemberIds.has(m.id))return null;
-              const isPortal = !!(m.linked_tree_id);
+              const isPortal=!!(m.linked_tree_id);
               const col=COLORS[m.role]||COLORS["Otro"],mine=isMine(m),isFirst=connectFirst===m.id;
 
+              // ── Tarjeta Portal ──────────────────────────────────
               if(isPortal) return(
                 <div key={m.id} data-cardid={m.id}
                   onMouseDown={e=>onCardMouseDown(e,m.id)}
@@ -790,6 +709,7 @@ export default function App() {
                 </div>
               );
 
+              // ── Tarjeta Normal ──────────────────────────────────
               return(
                 <div key={m.id} data-cardid={m.id}
                   onMouseDown={e=>onCardMouseDown(e,m.id)}
@@ -800,8 +720,10 @@ export default function App() {
                     boxShadow:isFirst?"0 0 0 3px rgba(91,123,111,0.25),0 4px 20px rgba(93,58,26,0.1)":"0 3px 18px rgba(93,58,26,0.08)",
                     cursor:connectMode?"crosshair":(mine?"pointer":"default"),
                     overflow:"hidden",touchAction:"none" }}>
+
                   {!mine&&<div style={{ position:"absolute",top:5,right:5,zIndex:10,background:"rgba(255,252,245,0.9)",borderRadius:2,padding:"1px 5px",fontSize:9,color:"rgba(93,58,26,0.5)",border:"1px solid rgba(139,111,71,0.2)" }}>🔒</div>}
                   {isFirst&&<div style={{ position:"absolute",top:5,left:5,zIndex:10,background:"#5B7B6F",borderRadius:2,padding:"1px 6px",fontSize:9,color:"#FFF",fontFamily:"'Jost',sans-serif" }}>① origen</div>}
+
                   {m.photo?(
                     <div style={{ width:"100%",height:140,background:"#EDE4D0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
                       <img src={m.photo} style={{ maxWidth:"100%",maxHeight:"140px",width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none" }} draggable={false}/>
@@ -809,21 +731,46 @@ export default function App() {
                   ):(
                     <div style={{ width:"100%",height:140,background:"linear-gradient(135deg,#E8DFD0,#D5C9B8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,color:"rgba(139,111,71,0.3)" }}>👤</div>
                   )}
+
                   <div style={{ padding:"9px 11px 10px" }}>
                     <div style={{ display:"inline-block",padding:"2px 6px",borderRadius:2,fontSize:8,fontWeight:500,letterSpacing:1,textTransform:"uppercase",color:col[1],background:col[0],marginBottom:5 }}>{m.role}</div>
                     <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:400,color:"#2D1B0E",lineHeight:1.2 }}>{m.name}</div>
                     {m.year&&<div style={{ fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2 }}>✦ {m.year}</div>}
                   </div>
-                  {selected===m.id&&!connectMode&&(mine?(
-                    <div style={{ display:"flex",gap:3,padding:"6px 7px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)" }}>
-                      <button onClick={e=>{e.stopPropagation();setEditingMember(m);}}
-                        style={{ flex:2,padding:5,background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.25)",borderRadius:2,fontSize:9,color:"#5D3A1A",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase",fontWeight:500 }}>✏️ Editar</button>
-                      <button onClick={e=>{e.stopPropagation();removeMember(m.id);}}
-                        style={{ flex:1,padding:5,background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:9,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>✕</button>
-                    </div>
-                  ):(
-                    <div style={{ padding:"7px 9px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)",fontSize:9,color:"rgba(93,58,26,0.45)",textAlign:"center" }}>🔒 Creada por otro familiar</div>
-                  ))}
+
+                  {/* ── Botones de acción ── */}
+                  {selected===m.id&&!connectMode&&(
+                    mine ? (
+                      <div style={{ display:"flex",gap:3,padding:"6px 7px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)" }}>
+
+                        {/* ✏️ Editar */}
+                        <button
+                          onClick={e=>{e.stopPropagation();setEditingMember(m);}}
+                          style={{ flex:2,padding:5,background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.25)",borderRadius:2,fontSize:9,color:"#5D3A1A",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase",fontWeight:500 }}>
+                          ✏️ Editar
+                        </button>
+
+                        {/* 💌 Soltar con amor */}
+                        <button
+                          onClick={e=>{e.stopPropagation();setSoltarMember(m);}}
+                          style={{ flex:2,padding:5,background:"rgba(255,100,0,0.06)",border:"1px solid rgba(255,100,0,0.2)",borderRadius:2,fontSize:9,color:"#CC4400",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase",fontWeight:500 }}>
+                          💌 Soltar
+                        </button>
+
+                        {/* ✕ Eliminar */}
+                        <button
+                          onClick={e=>{e.stopPropagation();removeMember(m.id);}}
+                          style={{ flex:1,padding:5,background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:9,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase" }}>
+                          ✕
+                        </button>
+
+                      </div>
+                    ) : (
+                      <div style={{ padding:"7px 9px",borderTop:"1px solid rgba(139,111,71,0.12)",background:"rgba(245,240,232,0.5)",fontSize:9,color:"rgba(93,58,26,0.45)",textAlign:"center" }}>
+                        🔒 Creada por otro familiar
+                      </div>
+                    )
+                  )}
                 </div>
               );
             })}
@@ -848,7 +795,7 @@ export default function App() {
           )}
         </div>
 
-        {/* ── Barra generación ── */}
+        {/* Barra generación */}
         <div style={{ position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch" }}>
           <span style={{ fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3 }}>Ver:</span>
           {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
@@ -859,26 +806,46 @@ export default function App() {
           ))}
         </div>
 
-        {/* ── D-pad ── esquina inferior izquierda */}
+        {/* D-pad */}
         <div style={{ position:"fixed",bottom:68,left:12,zIndex:100 }}>
           <DPad onPan={handleDPan} onReset={()=>{setZoom(1);setPan({x:0,y:0});}}/>
         </div>
 
-        {/* ── Zoom ── esquina inferior derecha */}
+        {/* Zoom */}
         <div style={{ position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100 }}>
           {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
             <div key={l} onClick={fn} style={{ width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)",touchAction:"none" }}>{l}</div>
           ))}
         </div>
 
-        {/* ── Música ── centro inferior */}
+        {/* Música */}
         <div onClick={toggleMusic} style={{ position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s",touchAction:"none" }}>
           {playing?"🔇":"🎵"}
         </div>
 
-        {/* Modals */}
-        {editingMember&&<EditModal member={editingMember} onSave={saveMemberEdit} onClose={()=>setEditingMember(null)} handlePhotoFile={handlePhotoFile}/>}
+        {/* ── Modals ── */}
 
+        {/* Editar */}
+        {editingMember&&(
+          <EditModal
+            member={editingMember}
+            onSave={saveMemberEdit}
+            onClose={()=>setEditingMember(null)}
+            handlePhotoFile={handlePhotoFile}
+          />
+        )}
+
+        {/* Soltar con amor */}
+        {soltarMember&&(
+          <SoltarConAmor
+            member={soltarMember}
+            myId={MY_ID}
+            treeId={treeId}
+            onClose={()=>setSoltarMember(null)}
+          />
+        )}
+
+        {/* Compartir */}
         {showShare&&(
           <div onClick={()=>setShowShare(false)} style={{ position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px" }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)" }}>
@@ -895,6 +862,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Agregar */}
         {showAddModal&&(
           <div onClick={()=>setShowAddModal(false)} style={{ position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px" }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"92vh",overflowY:"auto" }}>
@@ -911,7 +879,8 @@ export default function App() {
               </div>
               {!form.isPortal?(
                 <>
-                  {[{label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
+                  {[
+                    {label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
                     {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
                     {label:"Año de nacimiento",el:<input placeholder="Ej: 1945" value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} style={iStyle}/>},
                   ].map(({label,el})=>(
@@ -951,6 +920,7 @@ export default function App() {
             </div>
           </div>
         )}
+
       </div>
     </>
   );
