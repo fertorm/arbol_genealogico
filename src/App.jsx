@@ -563,7 +563,11 @@ export default function App(){
         if(m&&isMine(m)&&!m.linked_tree_id){
           ts.mode="drag";ts.draggingId=cardId;
           ts.dragOff={x:t.clientX/zoomRef.current-m.x,y:t.clientY/zoomRef.current-m.y};
-        }else{ts.mode="idle";}
+        }else{
+          ts.mode="pan";
+          ts.panStart={x:t.clientX-panRef.current.x,y:t.clientY-panRef.current.y};
+          lastMovePanRef.current=panRef.current;lastMoveTimeRef.current=performance.now();
+        }
       }else{
         setSelected(null);
         if(connectModeRef.current){setConnectFirst(null);connectFirstRef.current=null;}
@@ -575,6 +579,7 @@ export default function App(){
   },[getCardIdFromElement,startInertia]);
 
   const onTouchMoveUnified=useCallback(e=>{
+    if (isInteractive(e.target)) return;
     e.preventDefault();
     const ts=touchStateRef.current;
     if(e.touches.length===2&&ts.mode==="pinch"){
@@ -614,6 +619,7 @@ export default function App(){
   },[schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
+    if (isInteractive(e.target)) return;
     e.preventDefault();
     const ts=touchStateRef.current;
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
