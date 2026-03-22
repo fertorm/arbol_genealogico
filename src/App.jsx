@@ -255,10 +255,8 @@ export default function App(){
   // Bloquear zoom del browser en móvil
   useEffect(()=>{
     const pZ=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
-    const pD=(e)=>{if(e.touches&&e.touches.length>1)e.preventDefault();};
     document.addEventListener("touchmove",pZ,{passive:false});
-    document.addEventListener("touchstart",pD,{passive:false});
-    return()=>{document.removeEventListener("touchmove",pZ);document.removeEventListener("touchstart",pD);};
+    return()=>{document.removeEventListener("touchmove",pZ);};
   },[]);
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
@@ -632,7 +630,7 @@ export default function App(){
   },[startInertia]);
 
   useEffect(()=>{
-    const el=wrapperRef.current;if(!el)return;
+    const el=canvasRef.current;if(!el)return;
     el.addEventListener("touchstart",onTouchStartUnified,{passive:false});
     el.addEventListener("touchmove",onTouchMoveUnified,{passive:false});
     el.addEventListener("touchend",onTouchEndUnified,{passive:false});
@@ -680,8 +678,8 @@ export default function App(){
 
   return(
     <>
-      <style>{`html,body{touch-action:none;overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
-      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none"}}>
+      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
+      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
 
