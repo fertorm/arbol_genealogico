@@ -1,11 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 
 <head>
   <meta charset="UTF-8" />
+
+  <!-- PWA: manifest & theme -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#C9A227" />
+
+  <!-- Viewport: no user-scaling (handled in app), safe area support -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+  <!-- Favicons -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>family-tree-app</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
+
+  <!-- Apple PWA (iOS home screen) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="My Family Tree" />
+  <link rel="apple-touch-icon" href="/icon-192x192.png" />
+
+  <!-- Android / general PWA -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="description" content="Build, view and share your family tree — collaborative and real-time." />
+
+  <title>My Family Tree</title>
 </head>
 
 <body>

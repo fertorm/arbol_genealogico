@@ -670,7 +670,7 @@ export default function App(){
 
   return(
     <>
-      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
+      <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}button,a,[role="button"]{touch-action:manipulation;}`}</style>
       <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
