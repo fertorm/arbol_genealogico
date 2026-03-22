@@ -4,16 +4,10 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import SoltarConAmor from "./SoltarConAmor";
 import NexusView from "./NexusView";
+import { useAuth } from './useAuth';
 
 const MUSIC_URL = "/musica.mp3";
 const PAN_STEP  = 120;
-
-function getMyId() {
-  let id = localStorage.getItem("arbol-my-id");
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem("arbol-my-id", id); }
-  return id;
-}
-const MY_ID = getMyId();
 
 function getRecentTrees() {
   try { return JSON.parse(localStorage.getItem("arbol-recent") || "[]"); } catch { return []; }
@@ -59,7 +53,7 @@ function clearTreeFromUrl(){const u=new URL(window.location);u.searchParams.dele
 function extractUUID(str){const m=str.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);return m?m[0]:null;}
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
-function HomeScreen({onOpen,onCreate}){
+function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
   const [recent,setRecent]=useState(getRecentTrees());
   const [joinId,setJoinId]=useState("");
   const [joining,setJoining]=useState(false);
@@ -114,6 +108,24 @@ function HomeScreen({onOpen,onCreate}){
           </div>
         )}
         <div style={{textAlign:"center",marginTop:20,fontSize:10,color:"rgba(93,58,26,0.3)"}}>Todo se guarda automáticamente en la nube ☁️</div>
+        {/* Google Auth */}
+        <div style={{marginTop:16,borderTop:"1px solid rgba(139,111,71,0.15)",paddingTop:16}}>
+          {user ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"rgba(91,123,111,0.08)",border:"1.5px solid rgba(91,123,111,0.2)",borderRadius:3}}>
+              <div>
+                <div style={{fontSize:11,color:"#3D6B5A",fontWeight:500,fontFamily:"'Jost',sans-serif"}}>✓ Conectado como</div>
+                <div style={{fontSize:12,color:"#2D1B0E",marginTop:2}}>{user.email}</div>
+              </div>
+              <button onClick={onSignOut} style={{padding:"6px 12px",background:"transparent",border:"1px solid rgba(180,60,60,0.3)",borderRadius:2,fontSize:10,color:"#B43C3C",cursor:"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase"}}>Salir</button>
+            </div>
+          ) : (
+            <button onClick={onSignIn}
+              style={{width:"100%",padding:"13px",background:"#FFF",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,fontFamily:"'Jost',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,color:"#3D2B1F"}}>
+              <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+              Iniciar sesión con Google
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -195,6 +207,15 @@ function DPad({onPan,onReset}){
 // APP PRINCIPAL
 // ════════════════════════════════════════════════════════════════════════════
 export default function App(){
+  const { user, signInWithGoogle, signOut } = useAuth();
+
+  // Effective ID: Google user.id if logged in, else legacy localStorage UUID
+  const MY_ID = user?.id ?? (() => {
+    let id = localStorage.getItem("arbol-my-id");
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem("arbol-my-id", id); }
+    return id;
+  })();
+
   const [screen,setScreen]           = useState("loading");
   const [members,setMembers]         = useState([]);
   const [connections,setConnections] = useState([]);
@@ -216,6 +237,7 @@ export default function App(){
   const [pan,setPan]                 = useState({x:0,y:0});
   const [genFilter,setGenFilter]     = useState("Todos");
   const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:""});
+  const [myRole,setMyRole]           = useState('viewer'); // 'owner' | 'editor' | 'viewer'
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -262,7 +284,8 @@ export default function App(){
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
   const handlePhotoFile=(file,cb)=>{if(!file)return;const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
-  const isMine=m=>!m.creator_id||m.creator_id===MY_ID;
+  const isMine=m=>myRole==='owner'||(!m.creator_id||m.creator_id===MY_ID);
+  const canEdit=myRole==='owner'||myRole==='editor';
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
 
@@ -346,6 +369,18 @@ export default function App(){
     setTreeId(id);treeIdRef.current=id;
     setMembers(m||[]);membersRef.current=m||[];
     setConnections(c||[]);
+    // Load role for this tree
+    if (user?.id) {
+      const { data: roleRow } = await supabase
+        .from('tree_roles')
+        .select('role')
+        .eq('tree_id', id)
+        .eq('user_id', user.id)
+        .single();
+      setMyRole(roleRow?.role ?? 'viewer');
+    } else {
+      setMyRole('viewer');
+    }
     setTreeIdInUrl(id);saveRecentTree(id,tree.name||"Mi Familia");
     setShowNexus(false);
     setScreen("tree");
@@ -354,6 +389,15 @@ export default function App(){
   const createTree=async()=>{
     setScreen("loading");
     const{data}=await supabase.from("trees").insert({name:"Mi Familia"}).select().single();
+    // Assign owner role if logged in
+    if (user?.id && data) {
+      await supabase.from('tree_roles').insert({
+        tree_id: data.id,
+        user_id: user.id,
+        role: 'owner',
+      });
+      setMyRole('owner');
+    }
     if(data)await openTree(data.id);else setScreen("home");
   };
 
@@ -666,7 +710,7 @@ export default function App(){
       🌳 Cargando...
     </div>
   );
-  if(screen==="home")return <HomeScreen onOpen={openTree} onCreate={createTree}/>;
+  if(screen==="home")return <HomeScreen onOpen={openTree} onCreate={createTree} user={user} onSignIn={signInWithGoogle} onSignOut={signOut}/>;
 
   return(
     <>
@@ -682,6 +726,10 @@ export default function App(){
             <div>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:300,color:"#3D2B1F",letterSpacing:1}}>Árbol <em style={{fontStyle:"italic",color:"#8B6F47"}}>Genealógico</em></div>
               <div style={{fontSize:10,color:"rgba(93,58,26,0.45)",marginTop:1}}>{members.length} personas · {connections.length} vínculos · <span style={{color:"#5B7B6F"}}>● en vivo</span></div>
+              {/* Role badge */}
+              {myRole==='owner'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#8B6A00",background:"rgba(201,162,39,0.15)",border:"1px solid rgba(201,162,39,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👑 Dueño</div>}
+              {myRole==='editor'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#3D6B5A",background:"rgba(77,184,158,0.12)",border:"1px solid rgba(77,184,158,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>✏️ Editor</div>}
+              {myRole==='viewer'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"rgba(93,58,26,0.45)",background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👁 Visitante</div>}
             </div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -699,10 +747,10 @@ export default function App(){
               <>
                 {/* Feature 3: Botón Nexus */}
                 <Btn onClick={()=>setShowNexus(true)} style={{borderColor:"rgba(212,160,23,0.4)",color:"#8B6A00"}}>🌐 Nexus</Btn>
-                <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>
+                {canEdit && <Btn onClick={()=>{setConnectMode(true);connectModeRef.current=true;setConnectFirst(null);connectFirstRef.current=null;}}>↔ Conectar</Btn>}
                 <Btn onClick={exportPDF} style={{borderColor:"rgba(139,111,71,0.4)",color:"#5D3A1A"}}>{exporting?"...":"↓ PDF"}</Btn>
                 <Btn onClick={()=>setShowShare(true)} style={{borderColor:"rgba(91,123,111,0.4)",color:"#3D6B5A"}}>🔗 Compartir</Btn>
-                <Btn onClick={()=>setShowAddModal(true)} primary>+ Agregar</Btn>
+                {canEdit && <Btn onClick={()=>setShowAddModal(true)} primary>+ Agregar</Btn>}
               </>
             )}
           </div>
