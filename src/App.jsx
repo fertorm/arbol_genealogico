@@ -670,7 +670,7 @@ export default function App(){
   return(
     <>
       <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}`}</style>
-      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif",touchAction:"none"}}>
+      <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
         <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
 
@@ -845,136 +845,138 @@ export default function App(){
             </div>
           )}
         </div>
+      </div>{/* fin wrapperRef — canvas aislado */}
 
-        {/* Barra generación */}
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch",touchAction:"auto"}}>
-          <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
-          {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
-            <button key={g} onClick={()=>setGenFilter(g)}
-              style={{padding:"6px 13px",borderRadius:20,border:`1.5px solid ${genFilter===g?"#8B6F47":"rgba(139,111,71,0.25)"}`,background:genFilter===g?"#8B6F47":"transparent",color:genFilter===g?"#FFF8F0":"rgba(93,58,26,0.6)",fontFamily:"'Jost',sans-serif",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s"}}>
-              {g}
-            </button>
-          ))}
-        </div>
+      {/* ── UI overlay: fuera de wrapperRef para evitar bloqueo de taps en Android ── */}
 
-        {/* D-pad */}
-        <div style={{position:"fixed",bottom:68,left:12,zIndex:100,touchAction:"auto"}}>
-          <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
-        </div>
-
-        {/* Zoom */}
-        <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
-          {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
-            <div key={l} onClick={fn} onTouchEnd={e=>{e.stopPropagation();fn();}} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)"}}>{l}</div>
-          ))}
-        </div>
-
-        {/* Música */}
-        <div onClick={toggleMusic} onTouchEnd={e=>{e.stopPropagation();toggleMusic(e);}} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s"}}>
-          {playing?"🔇":"🎵"}
-        </div>
-
-        {/* ── Modals ── */}
-        {editingMember&&(
-          <EditModal member={editingMember} onSave={saveMemberEdit} onClose={()=>setEditingMember(null)} handlePhotoFile={handlePhotoFile}/>
-        )}
-
-        {/* Feature 2: SoltarConAmor con puente de audio */}
-        {soltarMember&&(
-          <SoltarConAmor
-            member={soltarMember}
-            myId={MY_ID}
-            treeId={treeId}
-            onClose={closeSoltar}
-            mainAudioRef={audioRef}
-            mainPlaying={playing}
-          />
-        )}
-
-        {/* Feature 3: Nexus */}
-        {showNexus&&(
-          <NexusView
-            currentTreeId={treeId}
-            onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
-            onClose={()=>setShowNexus(false)}
-          />
-        )}
-
-        {/* Compartir */}
-        {showShare&&(
-          <div onClick={()=>setShowShare(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:8}}>Compartir árbol</div>
-              <div style={{fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6}}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
-              <div style={{padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{shareUrl}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-                <button onClick={copyLink} style={{padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center"}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
-                <button onClick={shareWhatsApp} style={{padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center"}}>💬 WhatsApp</button>
-                <button onClick={shareEmail} style={{padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center"}}>✉️ Email</button>
-              </div>
-              <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11}}>Cerrar</Btn>
-            </div>
-          </div>
-        )}
-
-        {/* Agregar */}
-        {showAddModal&&(
-          <div onClick={()=>setShowAddModal(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>Agregar al árbol</div>
-              <div style={{display:"flex",gap:6,marginBottom:18}}>
-                <button onClick={()=>setForm(f=>({...f,isPortal:false}))}
-                  style={{flex:1,padding:"9px 6px",border:`1.5px solid ${!form.isPortal?"#8B6F47":"rgba(139,111,71,0.25)"}`,borderRadius:2,background:!form.isPortal?"#8B6F47":"transparent",color:!form.isPortal?"#FFF8F0":"#8B6F47",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  👤 Persona
-                </button>
-                <button onClick={()=>setForm(f=>({...f,isPortal:true}))}
-                  style={{flex:1,padding:"9px 6px",border:`1.5px solid ${form.isPortal?"#D4A017":"rgba(212,160,23,0.3)"}`,borderRadius:2,background:form.isPortal?"#D4A017":"transparent",color:form.isPortal?"#FFF":"#8B6A00",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  🌳 Portal árbol
-                </button>
-              </div>
-              {!form.isPortal?(
-                <>
-                  {[{label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
-                    {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
-                    {label:"Año de nacimiento",el:<input placeholder="Ej: 1945" value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} style={iStyle}/>},
-                  ].map(({label,el})=>(
-                    <div key={label} style={{marginBottom:12}}>
-                      <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>{label}</label>
-                      {el}
-                    </div>
-                  ))}
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto (opcional)</label>
-                    <div onClick={()=>document.getElementById("mpi").click()} style={{width:"100%",height:90,border:"1.5px dashed rgba(139,111,71,0.35)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,color:"rgba(139,111,71,0.55)",overflow:"hidden",position:"relative",background:"rgba(245,240,232,0.5)"}}>
-                      {form.photo?<img src={form.photo} style={{maxWidth:"100%",maxHeight:"90px",objectFit:"contain"}}/>:"📷 Subir foto"}
-                    </div>
-                    <input id="mpi" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{handlePhotoFile(e.target.files[0],photo=>setForm(f=>({...f,photo})));e.target.value="";}}/>
-                  </div>
-                </>
-              ):(
-                <>
-                  <div style={{background:"rgba(255,248,200,0.5)",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:3,padding:"12px 14px",marginBottom:16,fontSize:11,color:"#6B5000",lineHeight:1.6}}>
-                    Crea una tarjeta dorada que al tocarla abrirá el árbol de otro familiar.
-                  </div>
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Nombre del portal</label>
-                    <input autoFocus placeholder="Ej: Familia Angulo Díaz" value={form.linkedTreeName} onChange={e=>setForm(f=>({...f,linkedTreeName:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
-                  </div>
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Link del árbol a vincular</label>
-                    <input placeholder="Pega aquí el link del otro árbol" value={form.linkedTreeUrl} onChange={e=>setForm(f=>({...f,linkedTreeUrl:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
-                    <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:4}}>Pide el link con el botón 🔗 Compartir del otro árbol</div>
-                  </div>
-                </>
-              )}
-              <div style={{display:"flex",gap:8,marginTop:18}}>
-                <Btn onClick={()=>setShowAddModal(false)} style={{flex:1,padding:11}}>Cancelar</Btn>
-                <Btn onClick={addMember} primary style={{flex:1,padding:11}}>Agregar ✦</Btn>
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Barra generación */}
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(8px)",borderTop:"1px solid rgba(139,111,71,0.15)",padding:"8px 12px 10px",display:"flex",gap:5,overflowX:"auto",zIndex:90,alignItems:"center",WebkitOverflowScrolling:"touch"}}>
+        <span style={{fontSize:9,color:"rgba(93,58,26,0.4)",letterSpacing:"0.8px",textTransform:"uppercase",flexShrink:0,marginRight:3}}>Ver:</span>
+        {["Todos",...Object.keys(GENERATION_ROLES)].map(g=>(
+          <button key={g} onClick={()=>setGenFilter(g)}
+            style={{padding:"6px 13px",borderRadius:20,border:`1.5px solid ${genFilter===g?"#8B6F47":"rgba(139,111,71,0.25)"}`,background:genFilter===g?"#8B6F47":"transparent",color:genFilter===g?"#FFF8F0":"rgba(93,58,26,0.6)",fontFamily:"'Jost',sans-serif",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s"}}>
+            {g}
+          </button>
+        ))}
       </div>
+
+      {/* D-pad */}
+      <div style={{position:"fixed",bottom:68,left:12,zIndex:100}}>
+        <DPad onPan={handleDPan} onReset={()=>{stopInertia();setZoom(1);setPan({x:0,y:0});}}/>
+      </div>
+
+      {/* Zoom */}
+      <div style={{position:"fixed",bottom:68,right:12,display:"flex",flexDirection:"column",gap:4,zIndex:100}}>
+        {[["+",()=>setZoom(z=>Math.min(3,z+0.2))],["−",()=>setZoom(z=>Math.max(0.2,z-0.2))]].map(([l,fn])=>(
+          <div key={l} onClick={fn} style={{width:46,height:46,background:"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.3)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,color:"#8B6F47",boxShadow:"0 2px 8px rgba(93,58,26,0.1)"}}>{l}</div>
+        ))}
+      </div>
+
+      {/* Música */}
+      <div onClick={toggleMusic} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s"}}>
+        {playing?"🔇":"🎵"}
+      </div>
+
+      {/* ── Modals ── */}
+      {editingMember&&(
+        <EditModal member={editingMember} onSave={saveMemberEdit} onClose={()=>setEditingMember(null)} handlePhotoFile={handlePhotoFile}/>
+      )}
+
+      {/* Feature 2: SoltarConAmor con puente de audio */}
+      {soltarMember&&(
+        <SoltarConAmor
+          member={soltarMember}
+          myId={MY_ID}
+          treeId={treeId}
+          onClose={closeSoltar}
+          mainAudioRef={audioRef}
+          mainPlaying={playing}
+        />
+      )}
+
+      {/* Feature 3: Nexus */}
+      {showNexus&&(
+        <NexusView
+          currentTreeId={treeId}
+          onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
+          onClose={()=>setShowNexus(false)}
+        />
+      )}
+
+      {/* Compartir */}
+      {showShare&&(
+        <div onClick={()=>setShowShare(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:8}}>Compartir árbol</div>
+            <div style={{fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6}}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
+            <div style={{padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{shareUrl}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              <button onClick={copyLink} style={{padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center"}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
+              <button onClick={shareWhatsApp} style={{padding:"12px 6px",background:"rgba(37,211,102,0.08)",border:"1.5px solid rgba(37,211,102,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#1a8a47",textAlign:"center"}}>💬 WhatsApp</button>
+              <button onClick={shareEmail} style={{padding:"12px 6px",background:"rgba(66,133,244,0.08)",border:"1.5px solid rgba(66,133,244,0.3)",borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:"#2a5fc4",textAlign:"center"}}>✉️ Email</button>
+            </div>
+            <Btn onClick={()=>setShowShare(false)} style={{width:"100%",padding:11}}>Cerrar</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Agregar */}
+      {showAddModal&&(
+        <div onClick={()=>setShowAddModal(false)} style={{position:"fixed",inset:0,background:"rgba(45,27,14,0.38)",backdropFilter:"blur(5px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(45,27,14,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:16}}>Agregar al árbol</div>
+            <div style={{display:"flex",gap:6,marginBottom:18}}>
+              <button onClick={()=>setForm(f=>({...f,isPortal:false}))}
+                style={{flex:1,padding:"9px 6px",border:`1.5px solid ${!form.isPortal?"#8B6F47":"rgba(139,111,71,0.25)"}`,borderRadius:2,background:!form.isPortal?"#8B6F47":"transparent",color:!form.isPortal?"#FFF8F0":"#8B6F47",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
+                👤 Persona
+              </button>
+              <button onClick={()=>setForm(f=>({...f,isPortal:true}))}
+                style={{flex:1,padding:"9px 6px",border:`1.5px solid ${form.isPortal?"#D4A017":"rgba(212,160,23,0.3)"}`,borderRadius:2,background:form.isPortal?"#D4A017":"transparent",color:form.isPortal?"#FFF":"#8B6A00",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.5px"}}>
+                🌳 Portal árbol
+              </button>
+            </div>
+            {!form.isPortal?(
+              <>
+                {[{label:"Nombre completo",el:<input autoFocus placeholder="Ej: María Elena Torres" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addMember()} style={iStyle}/>},
+                  {label:"Relación",el:<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iStyle}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>},
+                  {label:"Año de nacimiento",el:<input placeholder="Ej: 1945" value={form.year} onChange={e=>setForm(f=>({...f,year:e.target.value}))} style={iStyle}/>},
+                ].map(({label,el})=>(
+                  <div key={label} style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>{label}</label>
+                    {el}
+                  </div>
+                ))}
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:5}}>Foto (opcional)</label>
+                  <div onClick={()=>document.getElementById("mpi").click()} style={{width:"100%",height:90,border:"1.5px dashed rgba(139,111,71,0.35)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,color:"rgba(139,111,71,0.55)",overflow:"hidden",position:"relative",background:"rgba(245,240,232,0.5)"}}>
+                    {form.photo?<img src={form.photo} style={{maxWidth:"100%",maxHeight:"90px",objectFit:"contain"}}/>:"📷 Subir foto"}
+                  </div>
+                  <input id="mpi" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{handlePhotoFile(e.target.files[0],photo=>setForm(f=>({...f,photo})));e.target.value="";}}/>
+                </div>
+              </>
+            ):(
+              <>
+                <div style={{background:"rgba(255,248,200,0.5)",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:3,padding:"12px 14px",marginBottom:16,fontSize:11,color:"#6B5000",lineHeight:1.6}}>
+                  Crea una tarjeta dorada que al tocarla abrirá el árbol de otro familiar.
+                </div>
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Nombre del portal</label>
+                  <input autoFocus placeholder="Ej: Familia Angulo Díaz" value={form.linkedTreeName} onChange={e=>setForm(f=>({...f,linkedTreeName:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <label style={{display:"block",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:5}}>Link del árbol a vincular</label>
+                  <input placeholder="Pega aquí el link del otro árbol" value={form.linkedTreeUrl} onChange={e=>setForm(f=>({...f,linkedTreeUrl:e.target.value}))} style={{...iStyle,borderColor:"rgba(212,160,23,0.4)"}}/>
+                  <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:4}}>Pide el link con el botón 🔗 Compartir del otro árbol</div>
+                </div>
+              </>
+            )}
+            <div style={{display:"flex",gap:8,marginTop:18}}>
+              <Btn onClick={()=>setShowAddModal(false)} style={{flex:1,padding:11}}>Cancelar</Btn>
+              <Btn onClick={addMember} primary style={{flex:1,padding:11}}>Agregar ✦</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
