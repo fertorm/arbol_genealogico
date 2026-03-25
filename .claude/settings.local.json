@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(ls \"C:\\\\Users\\\\Usuario\\\\Documents\\\\Blue Tech\\\\.claude\\\\worktrees\\\\festive-shaw\\\\node_modules\\\\.bin\"\" 2>/dev/null | head -10 || echo \"NO BIN \")",
+      "Bash(gh pr:*)",
+      "Bash(winpty gh:*)",
+      "Bash(cmd.exe /c \"gh --version\")",
+      "Bash(npm install:*)",
+      "Bash(node scripts/generate-icons.mjs)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/Usuario/AppData/Local/**)",
+      "Read(//c/Users/Usuario/**)",
+      "Bash(npx vercel:*)",
+      "Bash(npm uninstall:*)"
+    ]
+  }
+}
