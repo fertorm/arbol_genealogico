@@ -7,12 +7,21 @@ const AUTH_RETURN_KEY = 'arbol-auth-return-to';
 export function useAuth() {
   const [user, setUser] = useState(undefined); // undefined = loading, null = not logged in, object = logged in
 
+  const syncUser = (nextUser) => {
+    setUser(prev => {
+      if (prev === undefined) return nextUser ?? null;
+      if (!prev && !nextUser) return null;
+      if (prev?.id && nextUser?.id && prev.id === nextUser.id) return prev;
+      return nextUser ?? null;
+    });
+  };
+
   useEffect(() => {
     let isActive = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isActive) return;
-      setUser(session?.user ?? null);
+      syncUser(session?.user ?? null);
 
       try {
         const returnTo = localStorage.getItem(AUTH_RETURN_KEY);
@@ -32,7 +41,7 @@ export function useAuth() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      syncUser(session?.user ?? null);
     });
 
     return () => {

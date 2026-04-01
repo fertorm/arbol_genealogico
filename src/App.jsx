@@ -224,6 +224,7 @@ function DPad({onPan,onReset}){
 export default function App(){
   const { user, signInWithGoogle, signOut } = useAuth();
   const treeIdFromUrl = getTreeIdFromUrl();
+  const userId = user?.id ?? null;
 
   // Effective ID: Google user.id if logged in, else legacy localStorage UUID
   const MY_ID = user?.id ?? (() => {
@@ -383,12 +384,15 @@ export default function App(){
   },[]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
-  async function openTree(id){
-    setScreen("loading");
-    const{data:tree}=await supabase.from("trees").select("*").eq("id",id).single();
-    if(!tree){setScreen("home");return;}
-    const{data:m}=await supabase.from("members").select("*").eq("tree_id",id);
-    const{data:c}=await supabase.from("connections").select("*").eq("tree_id",id);
+  async function openTree(id,{preserveScreen=false}={}){
+    if(!preserveScreen) setScreen("loading");
+    try{
+      const [{data:tree},{data:m},{data:c}] = await Promise.all([
+        supabase.from("trees").select("*").eq("id",id).single(),
+        supabase.from("members").select("*").eq("tree_id",id),
+        supabase.from("connections").select("*").eq("tree_id",id),
+      ]);
+      if(!tree){setScreen("home");return;}
     const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
     setTreeName(tree.name||"Mi Familia");
@@ -432,24 +436,34 @@ export default function App(){
     setTreeIdInUrl(id);saveRecentTree(id,tree.name||"Mi Familia");
     setShowNexus(false);
     setScreen("tree");
+    }catch(error){
+      console.error(error);
+      showToast("❌ No se pudo abrir el árbol. Intenta de nuevo.");
+      if(treeIdRef.current===id && membersRef.current.length>0){
+        setScreen("tree");
+      }else{
+        setScreen("home");
+      }
+    }
   }
 
   useEffect(()=>{
     if(user===undefined)return;
     let active = true;
     if(treeIdFromUrl){
-      openTree(treeIdFromUrl).then(async()=>{
+      const preserveScreen = screen==="tree" && treeIdRef.current===treeIdFromUrl;
+      openTree(treeIdFromUrl,{ preserveScreen }).then(async()=>{
         if(!active)return;
         const roleParam=new URLSearchParams(window.location.search).get('role');
-        if(roleParam==='editor'&&user?.id){
+        if(roleParam==='editor'&&userId){
           const{data:existing}=await supabase
             .from('tree_roles')
             .select('role')
             .eq('tree_id',treeIdFromUrl)
-            .eq('user_id',user.id)
+            .eq('user_id',userId)
             .single();
           if(!existing){
-            await supabase.from('tree_roles').insert({tree_id:treeIdFromUrl,user_id:user.id,role:'editor'});
+            await supabase.from('tree_roles').insert({tree_id:treeIdFromUrl,user_id:userId,role:'editor'});
             if(active)setMyRole('editor');
           }
         }
@@ -459,7 +473,7 @@ export default function App(){
       setScreen("home");
       return ()=>{ active = false; };
     }
-  },[treeIdFromUrl, user]);
+  },[treeIdFromUrl, userId, screen]);
 
   useEffect(()=>{
     if(screen!=="tree"||myRole!=='viewer'||members.length===0||soltarMember){
