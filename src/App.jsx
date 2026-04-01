@@ -273,6 +273,8 @@ export default function App(){
   const audioRef        = useRef(null);   // música principal
   const audioFadeRef    = useRef(null);   // interval id del fade de audio principal
   const wrapperRef      = useRef(null);
+  const openingTreeIdRef = useRef(null);
+  const loadingRetryRef  = useRef(null);
 
   // ── Feature 4: RAF + inertia refs ──────────────────────────────────────────
   const rafPanRef       = useRef(null);
@@ -385,6 +387,7 @@ export default function App(){
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function openTree(id,{preserveScreen=false}={}){
+    openingTreeIdRef.current = id;
     if(!preserveScreen) setScreen("loading");
     try{
       const [{data:tree},{data:m},{data:c}] = await Promise.all([
@@ -474,6 +477,43 @@ export default function App(){
       return ()=>{ active = false; };
     }
   },[treeIdFromUrl, userId, screen]);
+
+  useEffect(()=>{
+    if(screen!=="loading"){
+      if(loadingRetryRef.current){
+        clearTimeout(loadingRetryRef.current);
+        loadingRetryRef.current = null;
+      }
+      return;
+    }
+    loadingRetryRef.current = setTimeout(()=>{
+      const pendingTreeId = openingTreeIdRef.current || treeIdFromUrl;
+      if(document.visibilityState==="visible" && pendingTreeId){
+        openTree(pendingTreeId,{ preserveScreen:true });
+      }
+    }, 2500);
+    return ()=>{
+      if(loadingRetryRef.current){
+        clearTimeout(loadingRetryRef.current);
+        loadingRetryRef.current = null;
+      }
+    };
+  },[screen, treeIdFromUrl]);
+
+  useEffect(()=>{
+    const handleVisible = ()=>{
+      const pendingTreeId = openingTreeIdRef.current || treeIdFromUrl;
+      if(document.visibilityState==="visible" && screen==="loading" && pendingTreeId){
+        openTree(pendingTreeId,{ preserveScreen:true });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", handleVisible);
+    return ()=>{
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", handleVisible);
+    };
+  },[screen, treeIdFromUrl, userId]);
 
   useEffect(()=>{
     if(screen!=="tree"||myRole!=='viewer'||members.length===0||soltarMember){
