@@ -51,6 +51,7 @@ function getTreeIdFromUrl(){return new URLSearchParams(window.location.search).g
 function setTreeIdInUrl(id){const u=new URL(window.location);u.searchParams.set("tree",id);window.history.pushState({},"",u);}
 function clearTreeFromUrl(){const u=new URL(window.location);u.searchParams.delete("tree");window.history.pushState({},"",u);}
 function extractUUID(str){const m=str.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);return m?m[0]:null;}
+function getVisitorHintKey(treeId){return `arbol-soltar-hint-seen:${treeId}`;}
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
@@ -257,6 +258,7 @@ export default function App(){
   const [myRole,setMyRole]           = useState('viewer'); // 'owner' | 'editor' | 'viewer'
   const [showApproval,setShowApproval] = useState(false);
   const [canClaimOwnership,setCanClaimOwnership] = useState(false);
+  const [showVisitorHint,setShowVisitorHint] = useState(false);
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -373,6 +375,13 @@ export default function App(){
     setSoltarMember(null);
   },[playing]);
 
+  const dismissVisitorHint = useCallback(()=>{
+    setShowVisitorHint(false);
+    if(treeIdRef.current){
+      try{localStorage.setItem(getVisitorHintKey(treeIdRef.current),"1");}catch{}
+    }
+  },[]);
+
   // ── Init ──────────────────────────────────────────────────────────────────
   async function openTree(id){
     setScreen("loading");
@@ -451,6 +460,22 @@ export default function App(){
     }
   },[treeIdFromUrl, user]);
 
+  useEffect(()=>{
+    if(screen!=="tree"||myRole!=='viewer'||members.length===0||soltarMember){
+      setShowVisitorHint(false);
+      return;
+    }
+    if(!treeId)return;
+    try{
+      if(localStorage.getItem(getVisitorHintKey(treeId))==="1"){
+        setShowVisitorHint(false);
+        return;
+      }
+    }catch{}
+    const t=setTimeout(()=>setShowVisitorHint(true),900);
+    return()=>clearTimeout(t);
+  },[screen,myRole,members.length,treeId,soltarMember]);
+
   const createTree=async()=>{
     setScreen("loading");
     const{data}=await supabase.from("trees").insert({name:"Mi Familia"}).select().single();
@@ -469,6 +494,7 @@ export default function App(){
   const goHome=()=>{
     setTreeId(null);setMembers([]);setConnections([]);
     setCanClaimOwnership(false);
+    setShowVisitorHint(false);
     setConnectMode(false);setConnectFirst(null);setSelected(null);
     clearTreeFromUrl();setScreen("home");
   };
@@ -1055,6 +1081,28 @@ export default function App(){
       <div onClick={toggleMusic} style={{position:"fixed",bottom:68,left:"50%",transform:"translateX(-50%)",width:46,height:46,background:playing?"#8B6F47":"rgba(255,252,245,0.93)",border:"1.5px solid rgba(139,111,71,0.35)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22,zIndex:100,boxShadow:"0 2px 12px rgba(93,58,26,0.15)",transition:"all 0.2s"}}>
         {playing?"🔇":"🎵"}
       </div>
+
+      {showVisitorHint&&(
+        <div style={{position:"fixed",left:"50%",bottom:126,transform:"translateX(-50%)",width:"min(92vw,420px)",background:"rgba(255,248,240,0.97)",border:"1.5px solid rgba(204,68,0,0.2)",borderRadius:4,boxShadow:"0 18px 40px rgba(45,27,14,0.18)",padding:"14px 16px",zIndex:120}}>
+          <button onClick={dismissVisitorHint}
+            style={{position:"absolute",top:8,right:8,width:24,height:24,border:"none",background:"transparent",color:"rgba(93,58,26,0.35)",cursor:"pointer",fontSize:16,lineHeight:1}}>
+            ×
+          </button>
+          <div style={{fontSize:10,letterSpacing:"1px",textTransform:"uppercase",color:"#CC4400",fontWeight:500,fontFamily:"'Jost',sans-serif",marginBottom:8}}>
+            💌 Mensaje personal
+          </div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:23,fontWeight:300,color:"#2D1B0E",lineHeight:1.1,marginBottom:6}}>
+            Si quieres escribirle algo a alguien de tu árbol...
+          </div>
+          <div style={{fontSize:12,color:"rgba(93,58,26,0.72)",lineHeight:1.5,marginBottom:12}}>
+            Toca su tarjeta y usa <strong style={{color:"#CC4400"}}>Soltar</strong> para dejarle un mensaje personal con cariño.
+          </div>
+          <button onClick={dismissVisitorHint}
+            style={{padding:"7px 12px",background:"rgba(204,68,0,0.08)",border:"1px solid rgba(204,68,0,0.22)",borderRadius:2,color:"#CC4400",fontFamily:"'Jost',sans-serif",fontSize:10,letterSpacing:"0.8px",textTransform:"uppercase",cursor:"pointer"}}>
+            Entendido
+          </button>
+        </div>
+      )}
 
       {/* ── Modals ── */}
       {editingMember&&(
