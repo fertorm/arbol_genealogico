@@ -1,13 +1,11 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from "react";
 import { supabase } from "./supabase";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import SoltarConAmor from "./SoltarConAmor";
-import NexusView from "./NexusView";
 import { useAuth } from './useAuth';
 
 const MUSIC_URL = "/musica.mp3";
 const PAN_STEP  = 120;
+const SoltarConAmor = lazy(()=>import("./SoltarConAmor"));
+const NexusView = lazy(()=>import("./NexusView"));
 
 function getRecentTrees() {
   try { return JSON.parse(localStorage.getItem("arbol-recent") || "[]"); } catch { return []; }
@@ -435,28 +433,28 @@ export default function App(){
 
   useEffect(()=>{
     if(user===undefined)return;
+    let active = true;
     if(treeIdFromUrl){
-      const rafId = window.requestAnimationFrame(() => {
-        openTree(treeIdFromUrl).then(async()=>{
-          const roleParam=new URLSearchParams(window.location.search).get('role');
-          if(roleParam==='editor'&&user?.id){
-            const{data:existing}=await supabase
-              .from('tree_roles')
-              .select('role')
-              .eq('tree_id',treeIdFromUrl)
-              .eq('user_id',user.id)
-              .single();
-            if(!existing){
-              await supabase.from('tree_roles').insert({tree_id:treeIdFromUrl,user_id:user.id,role:'editor'});
-              setMyRole('editor');
-            }
+      openTree(treeIdFromUrl).then(async()=>{
+        if(!active)return;
+        const roleParam=new URLSearchParams(window.location.search).get('role');
+        if(roleParam==='editor'&&user?.id){
+          const{data:existing}=await supabase
+            .from('tree_roles')
+            .select('role')
+            .eq('tree_id',treeIdFromUrl)
+            .eq('user_id',user.id)
+            .single();
+          if(!existing){
+            await supabase.from('tree_roles').insert({tree_id:treeIdFromUrl,user_id:user.id,role:'editor'});
+            if(active)setMyRole('editor');
           }
-        });
+        }
       });
-      return () => window.cancelAnimationFrame(rafId);
+      return ()=>{ active = false; };
     }else{
-      const rafId = window.requestAnimationFrame(() => { setScreen("home"); });
-      return () => window.cancelAnimationFrame(rafId);
+      setScreen("home");
+      return ()=>{ active = false; };
     }
   },[treeIdFromUrl, user]);
 
@@ -604,6 +602,10 @@ export default function App(){
   const exportPDF=async()=>{
     setExporting(true);
     try{
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
       const canvas=await html2canvas(canvasRef.current,{backgroundColor:"#F5F0E8",scale:2,useCORS:true});
       const pdf=new jsPDF("landscape","mm","a4");
       pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,297,210);
@@ -840,7 +842,7 @@ export default function App(){
       <style>{`html,body{overflow:hidden;overscroll-behavior:none;}*{-webkit-tap-highlight-color:transparent;}button,a,[role="button"]{touch-action:manipulation;}`}</style>
       <div ref={wrapperRef} style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",flexDirection:"column",userSelect:"none",overflow:"hidden",fontFamily:"'Jost',sans-serif"}}>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
-        <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" style={{display:"none"}}/>
+        <audio ref={audioRef} src={MUSIC_URL} loop preload="metadata" style={{display:"none"}}/>
 
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"rgba(245,240,232,0.92)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(139,111,71,0.15)",flexShrink:0,gap:8,flexWrap:"wrap"}}>
@@ -1111,23 +1113,27 @@ export default function App(){
 
       {/* Feature 2: SoltarConAmor con puente de audio */}
       {soltarMember&&(
-        <SoltarConAmor
-          member={soltarMember}
-          myId={MY_ID}
-          treeId={treeId}
-          onClose={closeSoltar}
-          mainAudioRef={audioRef}
-          mainPlaying={playing}
-        />
+        <Suspense fallback={null}>
+          <SoltarConAmor
+            member={soltarMember}
+            myId={MY_ID}
+            treeId={treeId}
+            onClose={closeSoltar}
+            mainAudioRef={audioRef}
+            mainPlaying={playing}
+          />
+        </Suspense>
       )}
 
       {/* Feature 3: Nexus */}
       {showNexus&&(
-        <NexusView
-          currentTreeId={treeId}
-          onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
-          onClose={()=>setShowNexus(false)}
-        />
+        <Suspense fallback={null}>
+          <NexusView
+            currentTreeId={treeId}
+            onNavigate={(id)=>{ setShowNexus(false); openTree(id); }}
+            onClose={()=>setShowNexus(false)}
+          />
+        </Suspense>
       )}
 
       {/* Approval Modal */}
