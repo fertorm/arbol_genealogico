@@ -236,6 +236,7 @@ export default function App(){
   const [members,setMembers]         = useState([]);
   const [connections,setConnections] = useState([]);
   const [treeId,setTreeId]           = useState(null);
+  const [treeName,setTreeName]       = useState("");
   const [exporting,setExporting]     = useState(false);
   const [showAddModal,setShowAddModal]= useState(false);
   const [showShare,setShowShare]     = useState(false);
@@ -257,6 +258,7 @@ export default function App(){
   const [showApproval,setShowApproval] = useState(false);
   const [canClaimOwnership,setCanClaimOwnership] = useState(false);
   const [showVisitorHint,setShowVisitorHint] = useState(false);
+  const [branchingFromId,setBranchingFromId] = useState(null);
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -389,6 +391,7 @@ export default function App(){
     const{data:c}=await supabase.from("connections").select("*").eq("tree_id",id);
     const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
+    setTreeName(tree.name||"Mi Familia");
     setMembers(m||[]);membersRef.current=m||[];
     setConnections(c||[]);
     setCanClaimOwnership(false);
@@ -490,9 +493,10 @@ export default function App(){
   };
 
   const goHome=()=>{
-    setTreeId(null);setMembers([]);setConnections([]);
+    setTreeId(null);setTreeName("");setMembers([]);setConnections([]);
     setCanClaimOwnership(false);
     setShowVisitorHint(false);
+    setBranchingFromId(null);
     setConnectMode(false);setConnectFirst(null);setSelected(null);
     clearTreeFromUrl();setScreen("home");
   };
@@ -509,6 +513,104 @@ export default function App(){
     setMyRole('owner');
     setCanClaimOwnership(false);
     showToast("✓ Ahora eres dueño de este árbol", "#2D7A4F");
+  };
+
+  const branchFromMember = async (member) => {
+    if (!user?.id) {
+      showToast("🔐 Inicia sesión para crear tu árbol desde esta persona", "#8B6A00");
+      return;
+    }
+    if (!treeIdRef.current || !member || member.linked_tree_id) return;
+
+    setBranchingFromId(member.id);
+    try {
+      const partnerIds = connections
+        .filter(conn => conn.type === "pareja" && (conn.from_id === member.id || conn.to_id === member.id))
+        .map(conn => conn.from_id === member.id ? conn.to_id : conn.from_id);
+
+      const partners = partnerIds
+        .map(id => members.find(person => person.id === id))
+        .filter(person => person && !person.linked_tree_id);
+
+      const seeds = [member, ...partners];
+      const branchLabel = seeds.map(person => person.name).join(" + ");
+      const branchTreeName = `Rama de ${member.name}`;
+
+      const { data: newTree, error: treeError } = await supabase
+        .from("trees")
+        .insert({ name: branchTreeName })
+        .select()
+        .single();
+
+      if (treeError || !newTree) throw treeError || new Error("No se pudo crear el árbol");
+
+      const { error: roleError } = await supabase.from("tree_roles").insert({
+        tree_id: newTree.id,
+        user_id: user.id,
+        role: "owner",
+      });
+      if (roleError) throw roleError;
+
+      const seededMembers = seeds.map((person, index) => ({
+        tree_id: newTree.id,
+        name: person.name,
+        role: person.role,
+        photo: person.photo || null,
+        year: person.year || "",
+        deceased: person.deceased || false,
+        death_year: person.death_year || null,
+        creator_id: user.id,
+        status: "approved",
+        x: 240 + (index * 190),
+        y: 220,
+      }));
+
+      const { data: createdMembers, error: memberError } = await supabase
+        .from("members")
+        .insert(seededMembers)
+        .select();
+      if (memberError || !createdMembers) throw memberError || new Error("No se pudo sembrar el nuevo árbol");
+
+      if (createdMembers.length > 1) {
+        const sourceToCreated = new Map(createdMembers.map((created, index) => [seeds[index].id, created.id]));
+        const partnerConnections = connections
+          .filter(conn => conn.type === "pareja" && sourceToCreated.has(conn.from_id) && sourceToCreated.has(conn.to_id))
+          .map(conn => ({
+            tree_id: newTree.id,
+            from_id: sourceToCreated.get(conn.from_id),
+            to_id: sourceToCreated.get(conn.to_id),
+            type: "pareja",
+          }));
+
+        if (partnerConnections.length > 0) {
+          const { error: connectionError } = await supabase.from("connections").insert(partnerConnections);
+          if (connectionError) throw connectionError;
+        }
+      }
+
+      const sourcePortalX = createdMembers.length > 1 ? 240 + ((createdMembers.length - 1) * 190) / 2 : 240;
+      const { error: portalError } = await supabase.from("members").insert({
+        tree_id: newTree.id,
+        name: `Nexo con ${branchLabel}`,
+        role: "Otro",
+        linked_tree_id: treeIdRef.current,
+        linked_tree_name: treeName || "Árbol de origen",
+        creator_id: user.id,
+        status: "approved",
+        x: sourcePortalX,
+        y: 470,
+      });
+      if (portalError) throw portalError;
+
+      showToast("✓ Tu nuevo árbol nació desde esta rama", "#2D7A4F");
+      setSelected(null);
+      await openTree(newTree.id);
+    } catch (error) {
+      console.error(error);
+      showToast("❌ No se pudo crear el árbol desde esta persona");
+    } finally {
+      setBranchingFromId(null);
+    }
   };
 
   // ── Realtime ──────────────────────────────────────────────────────────────
@@ -1013,6 +1115,14 @@ export default function App(){
                         💌 Soltar
                       </button>
 
+                      {!mine&&(
+                        <button onClick={e=>{e.stopPropagation();branchFromMember(m);}}
+                          disabled={branchingFromId===m.id}
+                          style={{flex:2,padding:5,background:"rgba(91,123,111,0.08)",border:"1px solid rgba(91,123,111,0.25)",borderRadius:2,fontSize:9,color:"#3D6B5A",cursor:branchingFromId===m.id?"wait":"pointer",fontFamily:"'Jost',sans-serif",textTransform:"uppercase",fontWeight:500,opacity:branchingFromId===m.id?0.7:1}}>
+                          {branchingFromId===m.id?"...":"🌱 Mi árbol"}
+                        </button>
+                      )}
+
                       {/* ✕ Eliminar — solo owner */}
                       {mine&&(
                         <button onClick={e=>{e.stopPropagation();removeMember(m.id);}}
@@ -1024,7 +1134,7 @@ export default function App(){
                       {/* Indicador no-owner */}
                       {!mine&&(
                         <div style={{width:"100%",textAlign:"center",fontSize:9,color:"rgba(93,58,26,0.35)",paddingTop:2}}>
-                          🔒 solo lectura
+                          🔒 solo lectura · puedes crear tu propia rama
                         </div>
                       )}
                     </div>
