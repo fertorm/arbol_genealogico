@@ -256,6 +256,7 @@ export default function App(){
   const [form,setForm]               = useState({name:"",role:"Padre/Madre",photo:null,year:"",isPortal:false,linkedTreeUrl:"",linkedTreeName:"",deceased:false,death_year:""});
   const [myRole,setMyRole]           = useState('viewer'); // 'owner' | 'editor' | 'viewer'
   const [showApproval,setShowApproval] = useState(false);
+  const [canClaimOwnership,setCanClaimOwnership] = useState(false);
 
   // ── Core refs ──────────────────────────────────────────────────────────────
   const treeIdRef       = useRef(null);
@@ -379,9 +380,11 @@ export default function App(){
     if(!tree){setScreen("home");return;}
     const{data:m}=await supabase.from("members").select("*").eq("tree_id",id);
     const{data:c}=await supabase.from("connections").select("*").eq("tree_id",id);
+    const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
     setMembers(m||[]);membersRef.current=m||[];
     setConnections(c||[]);
+    setCanClaimOwnership(false);
     // Load role for this tree
     if (user?.id) {
       const { data: roleRow } = await supabase
@@ -395,7 +398,6 @@ export default function App(){
         setMyRole(roleRow.role);
       } else {
         // Check if they created members in this tree via old UUID
-        const legacyId = localStorage.getItem("arbol-my-id");
         const { data: legacyMembers } = legacyId ? await supabase
           .from('members')
           .select('id')
@@ -408,6 +410,9 @@ export default function App(){
           await supabase.from('tree_roles').insert({ tree_id: id, user_id: user.id, role: 'owner' });
           setMyRole('owner');
         } else {
+          const treeMatchesLegacyOwner = !!(tree?.creator_id && tree.creator_id === legacyId);
+          const treeMatchesAuthUser = !!(tree?.creator_id && tree.creator_id === user.id);
+          setCanClaimOwnership(treeMatchesLegacyOwner || treeMatchesAuthUser);
           setMyRole('viewer');
         }
       }
@@ -463,8 +468,23 @@ export default function App(){
 
   const goHome=()=>{
     setTreeId(null);setMembers([]);setConnections([]);
+    setCanClaimOwnership(false);
     setConnectMode(false);setConnectFirst(null);setSelected(null);
     clearTreeFromUrl();setScreen("home");
+  };
+
+  const claimTreeOwnership = async () => {
+    if (!user?.id || !treeIdRef.current) return;
+    const { error } = await supabase
+      .from('tree_roles')
+      .upsert({ tree_id: treeIdRef.current, user_id: user.id, role: 'owner' }, { onConflict: 'tree_id,user_id' });
+    if (error) {
+      showToast("❌ No se pudo reclamar este árbol");
+      return;
+    }
+    setMyRole('owner');
+    setCanClaimOwnership(false);
+    showToast("✓ Ahora eres dueño de este árbol", "#2D7A4F");
   };
 
   // ── Realtime ──────────────────────────────────────────────────────────────
@@ -807,6 +827,18 @@ export default function App(){
               {myRole==='owner'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#8B6A00",background:"rgba(201,162,39,0.15)",border:"1px solid rgba(201,162,39,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👑 Dueño</div>}
               {myRole==='editor'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#3D6B5A",background:"rgba(77,184,158,0.12)",border:"1px solid rgba(77,184,158,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>✏️ Editor</div>}
               {myRole==='viewer'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"rgba(93,58,26,0.45)",background:"rgba(139,111,71,0.08)",border:"1px solid rgba(139,111,71,0.2)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👁 Visitante</div>}
+              {myRole==='viewer'&&!user?.id&&(
+                <button onClick={signInWithGoogle}
+                  style={{marginTop:6,padding:"5px 10px",background:"rgba(212,160,23,0.09)",border:"1px solid rgba(212,160,23,0.28)",borderRadius:2,color:"#8B6A00",fontFamily:"'Jost',sans-serif",fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",cursor:"pointer"}}>
+                  Iniciar sesión
+                </button>
+              )}
+              {myRole==='viewer'&&user?.id&&canClaimOwnership&&(
+                <button onClick={claimTreeOwnership}
+                  style={{marginTop:6,padding:"5px 10px",background:"rgba(91,123,111,0.1)",border:"1px solid rgba(91,123,111,0.3)",borderRadius:2,color:"#3D6B5A",fontFamily:"'Jost',sans-serif",fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",cursor:"pointer"}}>
+                  🔑 Reclamar árbol
+                </button>
+              )}
             </div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
