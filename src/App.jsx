@@ -224,6 +224,7 @@ function DPad({onPan,onReset}){
 // ════════════════════════════════════════════════════════════════════════════
 export default function App(){
   const { user, signInWithGoogle, signOut } = useAuth();
+  const treeIdFromUrl = getTreeIdFromUrl();
 
   // Effective ID: Google user.id if logged in, else legacy localStorage UUID
   const MY_ID = user?.id ?? (() => {
@@ -372,28 +373,7 @@ export default function App(){
   },[playing]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
-  useEffect(()=>{
-    const id=getTreeIdFromUrl();
-    if(id){
-      openTree(id).then(async()=>{
-        const roleParam=new URLSearchParams(window.location.search).get('role');
-        if(roleParam==='editor'&&user?.id){
-          const{data:existing}=await supabase
-            .from('tree_roles')
-            .select('role')
-            .eq('tree_id',id)
-            .eq('user_id',user.id)
-            .single();
-          if(!existing){
-            await supabase.from('tree_roles').insert({tree_id:id,user_id:user.id,role:'editor'});
-            setMyRole('editor');
-          }
-        }
-      });
-    }else setScreen("home");
-  },[]);
-
-  const openTree=async(id)=>{
+  async function openTree(id){
     setScreen("loading");
     const{data:tree}=await supabase.from("trees").select("*").eq("id",id).single();
     if(!tree){setScreen("home");return;}
@@ -437,7 +417,34 @@ export default function App(){
     setTreeIdInUrl(id);saveRecentTree(id,tree.name||"Mi Familia");
     setShowNexus(false);
     setScreen("tree");
-  };
+  }
+
+  useEffect(()=>{
+    if(user===undefined)return;
+    if(treeIdFromUrl){
+      const rafId = window.requestAnimationFrame(() => {
+        openTree(treeIdFromUrl).then(async()=>{
+          const roleParam=new URLSearchParams(window.location.search).get('role');
+          if(roleParam==='editor'&&user?.id){
+            const{data:existing}=await supabase
+              .from('tree_roles')
+              .select('role')
+              .eq('tree_id',treeIdFromUrl)
+              .eq('user_id',user.id)
+              .single();
+            if(!existing){
+              await supabase.from('tree_roles').insert({tree_id:treeIdFromUrl,user_id:user.id,role:'editor'});
+              setMyRole('editor');
+            }
+          }
+        });
+      });
+      return () => window.cancelAnimationFrame(rafId);
+    }else{
+      const rafId = window.requestAnimationFrame(() => { setScreen("home"); });
+      return () => window.cancelAnimationFrame(rafId);
+    }
+  },[treeIdFromUrl, user]);
 
   const createTree=async()=>{
     setScreen("loading");
