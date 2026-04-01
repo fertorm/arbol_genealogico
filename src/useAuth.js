@@ -8,26 +8,37 @@ export function useAuth() {
   const [user, setUser] = useState(undefined); // undefined = loading, null = not logged in, object = logged in
 
   useEffect(() => {
-    try {
-      const returnTo = localStorage.getItem(AUTH_RETURN_KEY);
-      const currentPath = window.location.pathname + window.location.search;
-      if (window.location.hash.includes('access_token')) {
-        window.history.replaceState({}, '', currentPath);
-      }
-      if (returnTo && returnTo !== currentPath) {
-        localStorage.removeItem(AUTH_RETURN_KEY);
-        window.location.replace(returnTo);
-        return;
-      }
-    } catch {}
+    let isActive = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isActive) return;
       setUser(session?.user ?? null);
+
+      try {
+        const returnTo = localStorage.getItem(AUTH_RETURN_KEY);
+        const currentPath = window.location.pathname + window.location.search;
+        const hasAuthHash = window.location.hash.includes('access_token');
+
+        if (session?.user && returnTo && returnTo !== currentPath) {
+          localStorage.removeItem(AUTH_RETURN_KEY);
+          window.location.replace(returnTo);
+          return;
+        }
+
+        if (hasAuthHash) {
+          window.history.replaceState({}, '', currentPath);
+        }
+      } catch {}
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithGoogle = () =>
