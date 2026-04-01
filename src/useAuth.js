@@ -2,10 +2,25 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 
+const AUTH_RETURN_KEY = 'arbol-auth-return-to';
+
 export function useAuth() {
   const [user, setUser] = useState(undefined); // undefined = loading, null = not logged in, object = logged in
 
   useEffect(() => {
+    try {
+      const returnTo = localStorage.getItem(AUTH_RETURN_KEY);
+      const currentPath = window.location.pathname + window.location.search;
+      if (window.location.hash.includes('access_token')) {
+        window.history.replaceState({}, '', currentPath);
+      }
+      if (returnTo && returnTo !== currentPath) {
+        localStorage.removeItem(AUTH_RETURN_KEY);
+        window.location.replace(returnTo);
+        return;
+      }
+    } catch {}
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
@@ -18,8 +33,11 @@ export function useAuth() {
   const signInWithGoogle = () =>
     supabase.auth.signInWithOAuth({
       provider: 'google',
-      // Redirect back to current origin + path (without query params that could confuse OAuth)
-      options: { redirectTo: window.location.origin + window.location.pathname },
+      options: (() => {
+        const returnTo = window.location.pathname + window.location.search;
+        try { localStorage.setItem(AUTH_RETURN_KEY, returnTo); } catch {}
+        return { redirectTo: window.location.origin + returnTo };
+      })(),
     });
 
   const signOut = () => supabase.auth.signOut();
