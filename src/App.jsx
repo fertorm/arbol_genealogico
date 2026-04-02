@@ -341,6 +341,15 @@ export default function App(){
   const canEdit=myRole==='owner'||myRole==='editor';
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
+  const getWorldPoint = useCallback((clientX, clientY) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const localX = rect ? clientX - rect.left : clientX;
+    const localY = rect ? clientY - rect.top : clientY;
+    return {
+      x: (localX - panRef.current.x) / zoomRef.current,
+      y: (localY - panRef.current.y) / zoomRef.current,
+    };
+  },[]);
 
   // ── Feature 4: RAF-batched pan setter ─────────────────────────────────────
   const schedulePan = useCallback((newPan)=>{
@@ -862,15 +871,17 @@ export default function App(){
     const m=membersRef.current.find(x=>x.id===id);
     setSelected(id);
     if(!m||!isMine(m))return;
+    const world = getWorldPoint(clientX, clientY);
     draggingRef.current=id;
-    dragOffRef.current={x:clientX/zoomRef.current-m.x,y:clientY/zoomRef.current-m.y};
-  },[]);
+    dragOffRef.current={x:world.x-m.x,y:world.y-m.y};
+  },[getWorldPoint]);
 
   const onCardMouseDown=useCallback((e,id)=>{e.stopPropagation();startCardDrag(id,e.clientX,e.clientY);},[startCardDrag]);
 
   const onMouseMove=useCallback(e=>{
     if(draggingRef.current!==null){
-      setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:e.clientX/zoomRef.current-dragOffRef.current.x,y:e.clientY/zoomRef.current-dragOffRef.current.y}:m));
+      const world = getWorldPoint(e.clientX, e.clientY);
+      setMembers(p=>p.map(m=>m.id===draggingRef.current?{...m,x:world.x-dragOffRef.current.x,y:world.y-dragOffRef.current.y}:m));
     }else if(isPanningRef.current){
       const np={x:e.clientX-panStartRef.current.x,y:e.clientY-panStartRef.current.y};
       // Track velocity
@@ -879,17 +890,18 @@ export default function App(){
       lastMoveTimeRef.current=now;lastMovePanRef.current=np;
       setPan(np);
     }
-  },[]);
+  },[getWorldPoint]);
 
   const onMouseUp=useCallback(e=>{
     if(draggingRef.current!==null){
-      updateMemberPos(draggingRef.current,e.clientX/zoomRef.current-dragOffRef.current.x,e.clientY/zoomRef.current-dragOffRef.current.y);
+      const world = getWorldPoint(e.clientX, e.clientY);
+      updateMemberPos(draggingRef.current,world.x-dragOffRef.current.x,world.y-dragOffRef.current.y);
       draggingRef.current=null;
     }else if(isPanningRef.current){
       startInertia();
     }
     isPanningRef.current=false;
-  },[startInertia]);
+  },[getWorldPoint,startInertia]);
 
   const onCanvasMouseDown=e=>{
     if(e.target===canvasRef.current||e.target.tagName==="svg"||e.target.tagName==="SVG"){
@@ -938,8 +950,9 @@ export default function App(){
         const m=membersRef.current.find(x=>x.id===cardId);
         setSelected(cardId);
         if(m&&isMine(m)){
+          const world = getWorldPoint(t.clientX, t.clientY);
           ts.mode="drag";ts.draggingId=cardId;
-          ts.dragOff={x:t.clientX/zoomRef.current-m.x,y:t.clientY/zoomRef.current-m.y};
+          ts.dragOff={x:world.x-m.x,y:world.y-m.y};
         }else{ts.mode="idle";}
       }else{
         setSelected(null);
@@ -949,7 +962,7 @@ export default function App(){
         lastMovePanRef.current=panRef.current;lastMoveTimeRef.current=performance.now();
       }
     }
-  },[getCardIdFromElement,startInertia]);
+  },[getCardIdFromElement,getWorldPoint,startInertia]);
 
   const onTouchMoveUnified=useCallback(e=>{
     e.preventDefault();
@@ -976,7 +989,8 @@ export default function App(){
     if(e.touches.length===1){
       const t=e.touches[0];
       if(ts.mode==="drag"&&ts.draggingId){
-        setMembers(p=>p.map(m=>m.id===ts.draggingId?{...m,x:t.clientX/zoomRef.current-ts.dragOff.x,y:t.clientY/zoomRef.current-ts.dragOff.y}:m));
+        const world = getWorldPoint(t.clientX, t.clientY);
+        setMembers(p=>p.map(m=>m.id===ts.draggingId?{...m,x:world.x-ts.dragOff.x,y:world.y-ts.dragOff.y}:m));
         return;
       }
       if(ts.mode==="pan"){
@@ -988,14 +1002,15 @@ export default function App(){
         schedulePan(np);
       }
     }
-  },[schedulePan]);
+  },[getWorldPoint,schedulePan]);
 
   const onTouchEndUnified=useCallback(e=>{
     // No preventDefault: dejar que Android Chrome sintetice el click event
     const ts=touchStateRef.current;
     if(ts.mode==="drag"&&ts.draggingId&&e.changedTouches.length>0){
       const t=e.changedTouches[0];
-      updateMemberPos(ts.draggingId,t.clientX/zoomRef.current-ts.dragOff.x,t.clientY/zoomRef.current-ts.dragOff.y);
+      const world = getWorldPoint(t.clientX, t.clientY);
+      updateMemberPos(ts.draggingId,world.x-ts.dragOff.x,world.y-ts.dragOff.y);
     }
     if(ts.mode==="pan") startInertia();
     if(e.touches.length===1){
@@ -1004,7 +1019,7 @@ export default function App(){
       return;
     }
     ts.mode="idle";ts.draggingId=null;ts.pinchDist=0;
-  },[startInertia]);
+  },[getWorldPoint,startInertia]);
 
   useEffect(()=>{
     const el=canvasRef.current;if(!el)return;
