@@ -416,17 +416,25 @@ export default function App(){
       if (roleRow) {
         setMyRole(roleRow.role);
       } else {
-        // Check if they created members in this tree via old UUID
-        const { data: legacyMembers } = legacyId ? await supabase
-          .from('members')
-          .select('id')
-          .eq('tree_id', id)
-          .eq('creator_id', legacyId)
-          .limit(1) : { data: null };
+        // Check if they created members in this tree via auth user or old UUID
+        const [{ data: authMembers }, { data: legacyMembers }] = await Promise.all([
+          supabase
+            .from('members')
+            .select('id')
+            .eq('tree_id', id)
+            .eq('creator_id', user.id)
+            .limit(1),
+          legacyId ? supabase
+            .from('members')
+            .select('id')
+            .eq('tree_id', id)
+            .eq('creator_id', legacyId)
+            .limit(1) : Promise.resolve({ data: null }),
+        ]);
 
-        if (legacyMembers && legacyMembers.length > 0) {
+        if ((authMembers && authMembers.length > 0) || (legacyMembers && legacyMembers.length > 0)) {
           // Auto-claim as owner
-          await supabase.from('tree_roles').insert({ tree_id: id, user_id: user.id, role: 'owner' });
+          await supabase.from('tree_roles').upsert({ tree_id: id, user_id: user.id, role: 'owner' }, { onConflict: 'tree_id,user_id' });
           setMyRole('owner');
         } else {
           const treeMatchesLegacyOwner = !!(tree?.creator_id && tree.creator_id === legacyId);
@@ -534,14 +542,19 @@ export default function App(){
 
   const createTree=async()=>{
     setScreen("loading");
-    const{data}=await supabase.from("trees").insert({name:"Mi Familia"}).select().single();
+    const newTreePayload = {name:"Mi Familia"};
+    if (user?.id) {
+      newTreePayload.creator_id = user.id;
+      newTreePayload.access_mode = "editable";
+    }
+    const{data}=await supabase.from("trees").insert(newTreePayload).select().single();
     // Assign owner role if logged in
     if (user?.id && data) {
-      await supabase.from('tree_roles').insert({
+      await supabase.from('tree_roles').upsert({
         tree_id: data.id,
         user_id: user.id,
         role: 'owner',
-      });
+      }, { onConflict: 'tree_id,user_id' });
       setMyRole('owner');
     }
     if(data)await openTree(data.id);else setScreen("home");
@@ -593,17 +606,17 @@ export default function App(){
 
       const { data: newTree, error: treeError } = await supabase
         .from("trees")
-        .insert({ name: branchTreeName })
+        .insert({ name: branchTreeName, creator_id: user.id, access_mode: "editable" })
         .select()
         .single();
 
       if (treeError || !newTree) throw treeError || new Error("No se pudo crear el árbol");
 
-      const { error: roleError } = await supabase.from("tree_roles").insert({
+      const { error: roleError } = await supabase.from("tree_roles").upsert({
         tree_id: newTree.id,
         user_id: user.id,
         role: "owner",
-      });
+      }, { onConflict: 'tree_id,user_id' });
       if (roleError) throw roleError;
 
       const seededMembers = seeds.map((person, index) => ({
