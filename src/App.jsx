@@ -269,6 +269,7 @@ export default function App(){
   const membersRef      = useRef([]);
   const zoomRef         = useRef(1);
   const panRef          = useRef({x:0,y:0});
+  const screenRef       = useRef("loading");
   const canvasRef       = useRef(null);
   const audioRef        = useRef(null);   // música principal
   const audioFadeRef    = useRef(null);   // interval id del fade de audio principal
@@ -298,6 +299,7 @@ export default function App(){
   useEffect(()=>{membersRef.current=members;},[members]);
   useEffect(()=>{zoomRef.current=zoom;},[zoom]);
   useEffect(()=>{panRef.current=pan;},[pan]);
+  useEffect(()=>{screenRef.current=screen;},[screen]);
 
   // Bloquear pinch-zoom del browser en móvil (solo multi-touch en touchmove)
   useEffect(()=>{
@@ -451,10 +453,9 @@ export default function App(){
   }
 
   useEffect(()=>{
-    if(user===undefined)return;
     let active = true;
     if(treeIdFromUrl){
-      const preserveScreen = screen==="tree" && treeIdRef.current===treeIdFromUrl;
+      const preserveScreen = screenRef.current==="tree" && treeIdRef.current===treeIdFromUrl;
       openTree(treeIdFromUrl,{ preserveScreen }).then(async()=>{
         if(!active)return;
         const roleParam=new URLSearchParams(window.location.search).get('role');
@@ -476,7 +477,7 @@ export default function App(){
       setScreen("home");
       return ()=>{ active = false; };
     }
-  },[treeIdFromUrl, userId, screen]);
+  },[treeIdFromUrl, userId]);
 
   useEffect(()=>{
     if(screen!=="loading"){
