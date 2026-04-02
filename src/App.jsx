@@ -12,11 +12,16 @@ function getRecentTrees() {
 }
 function saveRecentTree(id, name) {
   const t = getRecentTrees().filter(t => t.id !== id);
-  t.unshift({ id, name, date: new Date().toLocaleDateString("es-BO") });
+  t.unshift({ id, name: displayTreeName(name), date: new Date().toLocaleDateString("es-BO") });
   localStorage.setItem("arbol-recent", JSON.stringify(t.slice(0, 10)));
 }
 function removeRecentTree(id) {
   localStorage.setItem("arbol-recent", JSON.stringify(getRecentTrees().filter(t => t.id !== id)));
+}
+function displayTreeName(name) {
+  const clean = (name || "").trim();
+  if (!clean || clean.toLowerCase() === "mi familia") return "Árbol sin nombre";
+  return clean;
 }
 
 const ROLES = ["Bisabuelo/a","Abuelo/a","Padre/Madre","Tío/Tía","Yo","Hermano/a","Pareja","Hijo/a","Nieto/a","Primo/a","Otro"];
@@ -94,8 +99,8 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
   return(
     <div style={{width:"100vw",minHeight:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Jost',sans-serif",padding:"24px 16px"}}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
-      <div style={{width:"100%",maxWidth:1120,display:"grid",gridTemplateColumns:"minmax(320px,480px) minmax(320px,1fr)",gap:20,alignItems:"start"}}>
-        <div style={{width:"100%"}}>
+      <div style={{width:"100%",maxWidth:1120,display:"grid",gridTemplateColumns:"minmax(360px,1fr) minmax(420px,1fr)",gap:32,alignItems:"stretch"}}>
+        <div style={{width:"100%",maxWidth:520,justifySelf:"center",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:560}}>
         <div style={{textAlign:"center",marginBottom:36}}>
           <div style={{fontSize:48,marginBottom:10}}>🌳</div>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,fontWeight:300,color:"#3D2B1F",letterSpacing:1}}>Árbol <em style={{fontStyle:"italic",color:"#8B6F47"}}>Genealógico</em></div>
@@ -121,7 +126,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
               <div key={t.id} onClick={()=>onOpen(t.id,t.name)}
                 style={{display:"flex",alignItems:"center",padding:"12px 16px",borderTop:i===0?"none":"1px solid rgba(139,111,71,0.1)",cursor:"pointer"}}>
                 <div style={{flex:1}}>
-                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#2D1B0E"}}>{t.name}</div>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:"#2D1B0E"}}>{displayTreeName(t.name)}</div>
                   <div style={{fontSize:10,color:"rgba(93,58,26,0.4)",marginTop:2}}>Último acceso: {t.date}</div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -453,8 +458,8 @@ export default function App(){
     const visibleMembers = spreadOverlappingMembers(m||[]);
     const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
-    setTreeName(tree.name||"Mi Familia");
-    setFamilyNameDraft(tree.name||"Mi Familia");
+    setTreeName(displayTreeName(tree.name));
+    setFamilyNameDraft(displayTreeName(tree.name));
     setMembers(visibleMembers);membersRef.current=visibleMembers;
     setConnections(c||[]);
     setCanClaimOwnership(false);
@@ -500,7 +505,7 @@ export default function App(){
     } else {
       setMyRole('viewer');
     }
-    setTreeIdInUrl(id);saveRecentTree(id,tree.name||"Mi Familia");
+    setTreeIdInUrl(id);saveRecentTree(id, displayTreeName(tree.name));
     setShowNexus(false);
     setScreen("tree");
     }catch(error){
@@ -1566,3 +1571,4 @@ function Btn({children,onClick,primary,color,style={}}){
     </button>
   );
 }
+

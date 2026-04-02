@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as d3 from "d3";
 
+function displayTreeName(name){
+  const clean = (name || "").trim();
+  if (!clean || clean.toLowerCase() === "mi familia") return "Árbol sin nombre";
+  return clean;
+}
+
 export default function NexusView({ currentTreeId, onNavigate, onClose, embedded = false }) {
   const svgRef      = useRef(null);
   const wrapRef     = useRef(null);
@@ -28,7 +34,7 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
 
       const nodes = trees.map(t => ({
         id:        t.id,
-        name:      t.name || "Mi Familia",
+        name:      displayTreeName(t.name),
         isCurrent: t.id === currentTreeId,
       }));
 
@@ -169,7 +175,7 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
       .attr("font-family", "Cormorant Garamond, serif")
       .attr("font-weight", "400")
       .attr("fill",        d => d.isCurrent ? "#FFF8F0" : "rgba(245,230,200,0.75)")
-      .text(d => d.name.length > 14 ? d.name.slice(0, 13) + "…" : d.name);
+      .text(d => d.name.length > 18 ? d.name.slice(0, 17) + "…" : d.name);
 
     // Badge "tú" en el nodo actual
     nodeEl.filter(d => d.isCurrent)
@@ -262,3 +268,4 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
     </div>
   );
 }
+
