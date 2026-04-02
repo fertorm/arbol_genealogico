@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as d3 from "d3";
 
-export default function NexusView({ currentTreeId, onNavigate, onClose }) {
+export default function NexusView({ currentTreeId, onNavigate, onClose, embedded = false }) {
   const svgRef      = useRef(null);
   const wrapRef     = useRef(null);
   const simRef      = useRef(null);
@@ -200,7 +200,9 @@ export default function NexusView({ currentTreeId, onNavigate, onClose }) {
   }
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",zIndex:500,display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif" }}>
+    <div style={embedded
+      ? { position:"relative",height:360,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif",borderRadius:4,overflow:"hidden",border:"1.5px solid rgba(139,111,71,0.18)",boxShadow:"0 20px 50px rgba(45,27,14,0.16)" }
+      : { position:"fixed",inset:0,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",zIndex:500,display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
 
       {/* Header */}
@@ -213,10 +215,17 @@ export default function NexusView({ currentTreeId, onNavigate, onClose }) {
             {loading ? "Mapeando linajes..." : `${nodeCount} árbol${nodeCount!==1?"es":""} en el universo familiar`}
           </div>
         </div>
-        <button onClick={onClose}
-          style={{ padding:"7px 16px",background:"transparent",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:2,color:"rgba(212,160,23,0.7)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",letterSpacing:"1px",textTransform:"uppercase",transition:"all 0.2s" }}>
-          ← Volver
-        </button>
+        {onClose && !embedded && (
+          <button onClick={onClose}
+            style={{ padding:"7px 16px",background:"transparent",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:2,color:"rgba(212,160,23,0.7)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",letterSpacing:"1px",textTransform:"uppercase",transition:"all 0.2s" }}>
+            ← Volver
+          </button>
+        )}
+        {embedded && (
+          <div style={{fontSize:10,color:"rgba(212,160,23,0.45)",letterSpacing:"0.8px",textTransform:"uppercase"}}>
+            Vista general
+          </div>
+        )}
       </div>
 
       {/* Graph area */}
@@ -247,7 +256,7 @@ export default function NexusView({ currentTreeId, onNavigate, onClose }) {
           <span style={{ fontSize:10,color:"rgba(212,160,23,0.4)" }}>Portal</span>
         </div>
         <span style={{ fontSize:9,color:"rgba(212,160,23,0.25)",marginLeft:"auto" }}>
-          Arrastra nodos · Pellizca para zoom · Clic para abrir árbol
+          {embedded ? "Arrastra nodos · clic para abrir árbol" : "Arrastra nodos · Pellizca para zoom · Clic para abrir árbol"}
         </span>
       </div>
     </div>
