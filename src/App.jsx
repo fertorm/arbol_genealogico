@@ -271,6 +271,7 @@ export default function App(){
   const [soltarMember,setSoltarMember]   = useState(null);
   const [showNexus,setShowNexus]     = useState(false);
   const [copied,setCopied]           = useState(false);
+  const [familyNameDraft,setFamilyNameDraft] = useState("");
   const [connectMode,setConnectMode] = useState(false);
   const [connectFirst,setConnectFirst]= useState(null);
   const [connType,setConnType]       = useState("padre-hijo");
@@ -428,6 +429,7 @@ export default function App(){
     const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
     setTreeName(tree.name||"Mi Familia");
+    setFamilyNameDraft(tree.name||"Mi Familia");
     setMembers(visibleMembers);membersRef.current=visibleMembers;
     setConnections(c||[]);
     setCanClaimOwnership(false);
@@ -608,6 +610,28 @@ export default function App(){
     setMyRole('owner');
     setCanClaimOwnership(false);
     showToast("✓ Ahora eres dueño de este árbol", "#2D7A4F");
+  };
+
+  const renameTree = async () => {
+    const nextName = familyNameDraft.trim();
+    if (!treeIdRef.current || myRole !== 'owner') return;
+    if (!nextName) {
+      showToast("Escribe un nombre para la familia", "#8B6A00");
+      return;
+    }
+    const { error } = await supabase
+      .from("trees")
+      .update({ name: nextName })
+      .eq("id", treeIdRef.current);
+
+    if (error) {
+      showToast("❌ No se pudo guardar el nombre");
+      return;
+    }
+
+    setTreeName(nextName);
+    saveRecentTree(treeIdRef.current, nextName);
+    showToast("✓ Nombre del árbol actualizado", "#2D7A4F");
   };
 
   const branchFromMember = async (member) => {
@@ -1046,7 +1070,12 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <button onClick={goHome} style={{padding:"6px 12px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"transparent",color:"rgba(93,58,26,0.5)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer"}}>← Inicio</button>
             <div>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:300,color:"#3D2B1F",letterSpacing:1}}>Árbol <em style={{fontStyle:"italic",color:"#8B6F47"}}>Genealógico</em></div>
+              <div style={{fontSize:10,letterSpacing:"1.4px",textTransform:"uppercase",color:"rgba(139,111,71,0.55)",fontWeight:500,fontFamily:"'Jost',sans-serif",marginBottom:1}}>
+                Familia
+              </div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#3D2B1F",letterSpacing:0.6,lineHeight:1.1}}>
+                {treeName || "Mi Familia"}
+              </div>
               <div style={{fontSize:10,color:"rgba(93,58,26,0.45)",marginTop:1}}>{members.length} personas · {connections.length} vínculos · <span style={{color:"#5B7B6F"}}>● en vivo</span></div>
               {/* Role badge */}
               {myRole==='owner'&&<div style={{fontSize:9,letterSpacing:"1px",textTransform:"uppercase",color:"#8B6A00",background:"rgba(201,162,39,0.15)",border:"1px solid rgba(201,162,39,0.3)",borderRadius:2,padding:"2px 7px",fontFamily:"'Jost',sans-serif",marginTop:3}}>👑 Dueño</div>}
@@ -1382,6 +1411,23 @@ export default function App(){
           <div onClick={e=>e.stopPropagation()} style={{background:"#FFF8F0",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:4,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(45,27,14,0.2)"}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"#2D1B0E",marginBottom:8}}>Compartir árbol</div>
             <div style={{fontSize:12,color:"rgba(93,58,26,0.5)",marginBottom:14,lineHeight:1.6}}>Comparte este link con tu familia. Cada familiar puede agregar su rama y solo edita sus propias tarjetas.</div>
+            {myRole==='owner'&&(
+              <div style={{marginBottom:14,padding:"12px 14px",background:"rgba(139,111,71,0.06)",border:"1.5px solid rgba(139,111,71,0.16)",borderRadius:3}}>
+                <div style={{fontSize:10,letterSpacing:"1px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:8,fontFamily:"'Jost',sans-serif"}}>
+                  ✍️ Nombre de la familia
+                </div>
+                <input
+                  value={familyNameDraft}
+                  onChange={e=>setFamilyNameDraft(e.target.value)}
+                  placeholder="Ej: Familia Torrico-Torrico"
+                  style={{width:"100%",padding:"10px 11px",border:"1.5px solid rgba(139,111,71,0.25)",borderRadius:2,background:"rgba(255,252,245,0.8)",fontFamily:"'Jost',sans-serif",fontSize:12,color:"#2D1B0E",outline:"none",marginBottom:8}}
+                />
+                <button onClick={renameTree}
+                  style={{padding:"8px 14px",background:"rgba(139,111,71,0.1)",border:"1.5px solid rgba(139,111,71,0.28)",borderRadius:2,fontSize:11,color:"#5D3A1A",cursor:"pointer",fontFamily:"'Jost',sans-serif",fontWeight:500}}>
+                  Guardar nombre
+                </button>
+              </div>
+            )}
             <div style={{padding:"10px 12px",background:"rgba(245,240,232,0.8)",border:"1.5px solid rgba(139,111,71,0.2)",borderRadius:2,marginBottom:14,fontSize:11,color:"#5D3A1A",wordBreak:"break-all",fontFamily:"monospace"}}>{shareUrl}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               <button onClick={copyLink} style={{padding:"12px 6px",background:copied?"rgba(45,122,79,0.1)":"rgba(245,240,232,0.8)",border:`1.5px solid ${copied?"rgba(45,122,79,0.4)":"rgba(139,111,71,0.3)"}`,borderRadius:3,cursor:"pointer",fontFamily:"'Jost',sans-serif",fontSize:11,color:copied?"#2D7A4F":"#5D3A1A",textAlign:"center"}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
