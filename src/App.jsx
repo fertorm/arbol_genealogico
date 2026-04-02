@@ -50,6 +50,32 @@ function setTreeIdInUrl(id){const u=new URL(window.location);u.searchParams.set(
 function clearTreeFromUrl(){const u=new URL(window.location);u.searchParams.delete("tree");window.history.pushState({},"",u);}
 function extractUUID(str){const m=str.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);return m?m[0]:null;}
 function getVisitorHintKey(treeId){return `arbol-soltar-hint-seen:${treeId}`;}
+function spreadOverlappingMembers(list){
+  const groups = new Map();
+  for(const member of list){
+    const key = `${Math.round(member.x||0)}:${Math.round(member.y||0)}`;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(member);
+  }
+  let changed = false;
+  const updated = list.map(member => ({ ...member }));
+  const byId = new Map(updated.map(member => [member.id, member]));
+  for(const membersAtSpot of groups.values()){
+    if(membersAtSpot.length < 2) continue;
+    membersAtSpot.forEach((member, index) => {
+      const clone = byId.get(member.id);
+      if(!clone) return;
+      const dx = (index % 3) * 26;
+      const dy = Math.floor(index / 3) * 22;
+      if(dx!==0 || dy!==0){
+        clone.x = (clone.x || 0) + dx;
+        clone.y = (clone.y || 0) + dy;
+        changed = true;
+      }
+    });
+  }
+  return changed ? updated : list;
+}
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
@@ -398,10 +424,11 @@ export default function App(){
         supabase.from("connections").select("*").eq("tree_id",id),
       ]);
       if(!tree){setScreen("home");return;}
+    const visibleMembers = spreadOverlappingMembers(m||[]);
     const legacyId = localStorage.getItem("arbol-my-id");
     setTreeId(id);treeIdRef.current=id;
     setTreeName(tree.name||"Mi Familia");
-    setMembers(m||[]);membersRef.current=m||[];
+    setMembers(visibleMembers);membersRef.current=visibleMembers;
     setConnections(c||[]);
     setCanClaimOwnership(false);
     // Load role for this tree
@@ -810,7 +837,7 @@ export default function App(){
     }
     const m=membersRef.current.find(x=>x.id===id);
     setSelected(id);
-    if(!m||!isMine(m)||m.linked_tree_id)return;
+    if(!m||!isMine(m))return;
     draggingRef.current=id;
     dragOffRef.current={x:clientX/zoomRef.current-m.x,y:clientY/zoomRef.current-m.y};
   },[]);
@@ -886,7 +913,7 @@ export default function App(){
         }
         const m=membersRef.current.find(x=>x.id===cardId);
         setSelected(cardId);
-        if(m&&isMine(m)&&!m.linked_tree_id){
+        if(m&&isMine(m)){
           ts.mode="drag";ts.draggingId=cardId;
           ts.dragOff={x:t.clientX/zoomRef.current-m.x,y:t.clientY/zoomRef.current-m.y};
         }else{ts.mode="idle";}
@@ -1108,12 +1135,12 @@ export default function App(){
               // ── Portal ──────────────────────────────────────────
               if(isPortal)return(
                 <div key={m.id} data-cardid={m.id} onMouseDown={e=>onCardMouseDown(e,m.id)}
-                  style={{position:"absolute",left:m.x,top:m.y,width:155,background:"linear-gradient(135deg,#FFF8E7,#FFF0C8)",border:`2px solid ${isFirst?"#5B7B6F":"#D4A017"}`,borderRadius:3,boxShadow:"0 4px 20px rgba(212,160,23,0.25)",cursor:"pointer",overflow:"hidden",touchAction:"none"}}>
+                  style={{position:"absolute",left:m.x,top:m.y,width:155,background:"linear-gradient(135deg,#FFF8E7,#FFF0C8)",border:`2px solid ${isFirst?"#5B7B6F":"#D4A017"}`,borderRadius:3,boxShadow:"0 4px 20px rgba(212,160,23,0.25)",cursor:connectMode?"crosshair":(mine?"grab":"pointer"),overflow:"hidden",touchAction:"none",zIndex:selected===m.id?25:5}}>
                   <div style={{padding:"14px 12px",textAlign:"center"}}>
                     <div style={{fontSize:32,marginBottom:6}}>🌳</div>
                     <div style={{fontSize:9,letterSpacing:"1.2px",textTransform:"uppercase",color:"#8B6A00",fontWeight:500,marginBottom:4}}>Árbol vinculado</div>
                     <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,fontWeight:400,color:"#5D3A00",lineHeight:1.2}}>{m.name}</div>
-                    <div style={{fontSize:9,color:"rgba(93,58,26,0.5)",marginTop:6}}>Toca para abrir →</div>
+                    <div style={{fontSize:9,color:"rgba(93,58,26,0.5)",marginTop:6}}>{mine?"Arrastra para ordenar · toca para abrir":"Toca para abrir →"}</div>
                   </div>
                   {selected===m.id&&!connectMode&&(
                     <div style={{borderTop:"1px solid rgba(212,160,23,0.3)",background:"rgba(255,248,200,0.6)",padding:"6px 7px",display:"flex",gap:3}}>
