@@ -337,7 +337,7 @@ export default function App(){
 
   const showToast=(msg,color="#B43C3C")=>{setToast({msg,color});setTimeout(()=>setToast(null),3000);};
   const handlePhotoFile=(file,cb)=>{if(!file)return;const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
-  const isMine=m=>myRole==='owner'||(!m.creator_id||m.creator_id===MY_ID);
+  const isMine = useCallback((m)=>myRole==='owner'||(!m.creator_id||m.creator_id===MY_ID),[myRole,MY_ID]);
   const canEdit=myRole==='owner'||myRole==='editor';
   const getTouchDist=(a,b)=>{const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);};
   const getTouchMid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
@@ -874,7 +874,7 @@ export default function App(){
     const world = getWorldPoint(clientX, clientY);
     draggingRef.current=id;
     dragOffRef.current={x:world.x-m.x,y:world.y-m.y};
-  },[getWorldPoint]);
+  },[getWorldPoint,isMine]);
 
   const onCardMouseDown=useCallback((e,id)=>{e.stopPropagation();startCardDrag(id,e.clientX,e.clientY);},[startCardDrag]);
 
@@ -962,7 +962,7 @@ export default function App(){
         lastMovePanRef.current=panRef.current;lastMoveTimeRef.current=performance.now();
       }
     }
-  },[getCardIdFromElement,getWorldPoint,startInertia]);
+  },[getCardIdFromElement,getWorldPoint,isMine,startInertia]);
 
   const onTouchMoveUnified=useCallback(e=>{
     e.preventDefault();
