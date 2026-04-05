@@ -8,21 +8,21 @@ function displayTreeName(name){
   return clean;
 }
 
-export default function NexusView({ currentTreeId, onNavigate, onClose, embedded = false }) {
-  const svgRef      = useRef(null);
-  const wrapRef     = useRef(null);
-  const simRef      = useRef(null);
-  const [loading, setLoading]   = useState(true);
+export default function NexusView({ currentTreeId, focusTreeId = null, onNavigate, onClose, embedded = false }) {
+  const svgRef = useRef(null);
+  const wrapRef = useRef(null);
+  const simRef = useRef(null);
+  const zoomRef = useRef(null);
+  const fitGraphRef = useRef(() => {});
+  const [loading, setLoading] = useState(true);
   const [nodeCount, setNodeCount] = useState(0);
-  const [hovered, setHovered]   = useState(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      // Cargar todos los árboles
+      setLoading(true);
       const { data: trees } = await supabase.from("trees").select("id, name, created_at");
-      // Cargar portales (miembros con linked_tree_id)
       const { data: portals } = await supabase
         .from("members")
         .select("tree_id, linked_tree_id, name, linked_tree_name")
@@ -31,11 +31,11 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
       if (cancelled || !trees) return;
 
       const treeIds = new Set(trees.map(t => t.id));
-
+      const highlightId = currentTreeId || focusTreeId || trees[0]?.id || null;
       const nodes = trees.map(t => ({
-        id:        t.id,
-        name:      displayTreeName(t.name),
-        isCurrent: t.id === currentTreeId,
+        id: t.id,
+        name: displayTreeName(t.name),
+        isCurrent: t.id === highlightId,
       }));
 
       const links = (portals || [])
@@ -43,7 +43,7 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
         .map(p => ({
           source: p.tree_id,
           target: p.linked_tree_id,
-          label:  p.linked_tree_name || p.name || "",
+          label: p.linked_tree_name || p.name || "",
         }));
 
       setNodeCount(nodes.length);
@@ -51,8 +51,11 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
     }
 
     load();
-    return () => { cancelled = true; if (simRef.current) simRef.current.stop(); };
-  }, [currentTreeId]);
+    return () => {
+      cancelled = true;
+      if (simRef.current) simRef.current.stop();
+    };
+  }, [currentTreeId, focusTreeId, embedded]);
 
   function buildGraph(nodes, links) {
     const container = wrapRef.current;
@@ -60,49 +63,40 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
 
     const W = container.clientWidth;
     const H = container.clientHeight;
-
-    const svg = d3.select(svgRef.current)
-      .attr("width", W).attr("height", H);
-
+    const svg = d3.select(svgRef.current).attr("width", W).attr("height", H);
     svg.selectAll("*").remove();
 
-    // Fondo estrellado sutil
     const defs = svg.append("defs");
-    const glow = defs.append("filter").attr("id", "glow");
+    const glow = defs.append("filter").attr("id", embedded ? "glow-embedded" : "glow");
     glow.append("feGaussianBlur").attr("stdDeviation", "4").attr("result", "coloredBlur");
     const feMerge = glow.append("feMerge");
     feMerge.append("feMergeNode").attr("in", "coloredBlur");
     feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-    const glowCurrent = defs.append("filter").attr("id", "glowCurrent");
+    const glowCurrent = defs.append("filter").attr("id", embedded ? "glowCurrent-embedded" : "glowCurrent");
     glowCurrent.append("feGaussianBlur").attr("stdDeviation", "8").attr("result", "coloredBlur");
     const fmCurrent = glowCurrent.append("feMerge");
     fmCurrent.append("feMergeNode").attr("in", "coloredBlur");
     fmCurrent.append("feMergeNode").attr("in", "SourceGraphic");
 
-    // Grupo principal (zoom/pan)
     const g = svg.append("g").attr("class", "nexus-g");
-
-    // Zoom behavior
     const zoom = d3.zoom()
       .scaleExtent([0.15, 4])
       .on("zoom", e => g.attr("transform", e.transform));
+    zoomRef.current = zoom;
     svg.call(zoom).on("dblclick.zoom", null);
 
-    // Copiar nodos para no mutar el estado
     const nodeData = nodes.map(n => ({ ...n }));
     const linkData = links.map(l => ({ ...l }));
 
-    // Simulación de fuerzas
     const sim = d3.forceSimulation(nodeData)
-      .force("link",      d3.forceLink(linkData).id(d => d.id).distance(200).strength(0.5))
-      .force("charge",    d3.forceManyBody().strength(-500))
-      .force("center",    d3.forceCenter(W / 2, H / 2))
-      .force("collision", d3.forceCollide(70))
-      .alphaDecay(0.03);
+      .force("link", d3.forceLink(linkData).id(d => d.id).distance(embedded ? 145 : 200).strength(0.55))
+      .force("charge", d3.forceManyBody().strength(embedded ? -380 : -500))
+      .force("center", d3.forceCenter(W / 2, H / 2))
+      .force("collision", d3.forceCollide(embedded ? 58 : 70))
+      .alphaDecay(0.035);
     simRef.current = sim;
 
-    // ── Links ──
     const linkGroup = g.append("g").attr("class", "links");
     const linkEl = linkGroup.selectAll("line")
       .data(linkData).join("line")
@@ -111,17 +105,15 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
       .attr("stroke-opacity", 0.4)
       .attr("stroke-dasharray", "6 4");
 
-    // Etiquetas de links
     const linkLabelEl = linkGroup.selectAll("text")
       .data(linkData).join("text")
       .text(d => d.label)
-      .attr("font-size", 9)
+      .attr("font-size", embedded ? 8 : 9)
       .attr("font-family", "Jost, sans-serif")
       .attr("fill", "rgba(212,160,23,0.55)")
       .attr("text-anchor", "middle")
       .attr("pointer-events", "none");
 
-    // ── Nodos ──
     const nodeGroup = g.append("g").attr("class", "nodes");
     const nodeEl = nodeGroup.selectAll("g")
       .data(nodeData).join("g")
@@ -130,89 +122,117 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
         d3.drag()
           .on("start", (event, d) => {
             if (!event.active) sim.alphaTarget(0.3).restart();
-            d.fx = d.x; d.fy = d.y;
+            d.fx = d.x;
+            d.fy = d.y;
           })
-          .on("drag",  (event, d) => { d.fx = event.x; d.fy = event.y; })
-          .on("end",   (event, d) => {
+          .on("drag", (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on("end", (event, d) => {
             if (!event.active) sim.alphaTarget(0);
-            d.fx = null; d.fy = null;
+            d.fx = null;
+            d.fy = null;
           })
       )
-      .on("click",     (event, d) => { event.stopPropagation(); onNavigate(d.id); })
-      .on("mouseover", (_, d)     => setHovered(d.id))
-      .on("mouseout",  ()         => setHovered(null));
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        onNavigate(d.id);
+      });
 
-    // Halo exterior
     nodeEl.append("circle")
-      .attr("r",            d => d.isCurrent ? 52 : 42)
-      .attr("fill",         "none")
-      .attr("stroke",       d => d.isCurrent ? "rgba(139,111,71,0.5)" : "rgba(212,160,23,0.15)")
+      .attr("r", d => d.isCurrent ? (embedded ? 48 : 52) : (embedded ? 34 : 42))
+      .attr("fill", "none")
+      .attr("stroke", d => d.isCurrent ? "rgba(139,111,71,0.5)" : "rgba(212,160,23,0.15)")
       .attr("stroke-width", 1)
       .attr("stroke-dasharray", "4 4");
 
-    // Círculo principal
     nodeEl.append("circle")
-      .attr("r",      d => d.isCurrent ? 44 : 36)
-      .attr("fill",   d => d.isCurrent ? "#5D3A1A" : "rgba(30,18,8,0.85)")
+      .attr("r", d => d.isCurrent ? (embedded ? 40 : 44) : (embedded ? 28 : 36))
+      .attr("fill", d => d.isCurrent ? "#5D3A1A" : "rgba(30,18,8,0.85)")
       .attr("stroke", d => d.isCurrent ? "#D4A017" : "rgba(139,111,71,0.45)")
       .attr("stroke-width", d => d.isCurrent ? 2.5 : 1.5)
-      .attr("filter", d => d.isCurrent ? "url(#glowCurrent)" : "url(#glow)");
+      .attr("filter", d => d.isCurrent ? `url(#${embedded ? "glowCurrent-embedded" : "glowCurrent"})` : `url(#${embedded ? "glow-embedded" : "glow"})`);
 
-    // Emoji árbol
     nodeEl.append("text")
-      .attr("text-anchor",       "middle")
+      .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("y",        d => d.isCurrent ? -12 : -10)
-      .attr("font-size", d => d.isCurrent ?  22 :  18)
+      .attr("y", d => d.isCurrent ? (embedded ? -10 : -12) : (embedded ? -9 : -10))
+      .attr("font-size", d => d.isCurrent ? (embedded ? 20 : 22) : (embedded ? 16 : 18))
       .text("🌳");
 
-    // Nombre del árbol
     nodeEl.append("text")
-      .attr("text-anchor",       "middle")
+      .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("y",           d => d.isCurrent ? 10 : 8)
-      .attr("font-size",   d => d.isCurrent ? 11 : 9)
+      .attr("y", d => d.isCurrent ? (embedded ? 10 : 10) : (embedded ? 8 : 8))
+      .attr("font-size", d => d.isCurrent ? (embedded ? 9 : 11) : (embedded ? 7.5 : 9))
       .attr("font-family", "Cormorant Garamond, serif")
       .attr("font-weight", "400")
-      .attr("fill",        d => d.isCurrent ? "#FFF8F0" : "rgba(245,230,200,0.75)")
-      .text(d => d.name.length > 18 ? d.name.slice(0, 17) + "…" : d.name);
+      .attr("fill", d => d.isCurrent ? "#FFF8F0" : "rgba(245,230,200,0.75)")
+      .text(d => d.name.length > (embedded ? 15 : 18) ? d.name.slice(0, embedded ? 14 : 17) + "…" : d.name);
 
-    // Badge "tú" en el nodo actual
     nodeEl.filter(d => d.isCurrent)
       .append("text")
-      .attr("text-anchor",       "middle")
+      .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("y", 26)
-      .attr("font-size", 8)
+      .attr("y", embedded ? 24 : 26)
+      .attr("font-size", embedded ? 7 : 8)
       .attr("font-family", "Jost, sans-serif")
       .attr("letter-spacing", "1px")
       .attr("fill", "rgba(212,160,23,0.7)")
-      .text("● TÚ ESTÁS AQUÍ");
+      .text("● TU ÁRBOL");
 
-    // Tick de simulación
-    sim.on("tick", () => {
+    const render = () => {
       linkEl
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
 
       linkLabelEl
         .attr("x", d => (d.source.x + d.target.x) / 2)
         .attr("y", d => (d.source.y + d.target.y) / 2 - 8);
 
       nodeEl.attr("transform", d => `translate(${d.x},${d.y})`);
-    });
+    };
+
+    const fitGraph = (animate = true) => {
+      if (!nodeData.length || !zoomRef.current) return;
+      const xs = nodeData.map(d => d.x || 0);
+      const ys = nodeData.map(d => d.y || 0);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const graphWidth = Math.max(maxX - minX, 1);
+      const graphHeight = Math.max(maxY - minY, 1);
+      const padding = embedded ? 56 : 96;
+      const scale = Math.max(0.2, Math.min(1.4, 0.92 / Math.max(graphWidth / Math.max(W - padding, 1), graphHeight / Math.max(H - padding, 1))));
+      const tx = W / 2 - ((minX + maxX) / 2) * scale;
+      const ty = H / 2 - ((minY + maxY) / 2) * scale;
+      const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+      const target = animate ? svg.transition().duration(500) : svg;
+      target.call(zoomRef.current.transform, transform);
+    };
+
+    fitGraphRef.current = fitGraph;
+
+    for (let i = 0; i < 220; i += 1) sim.tick();
+    render();
+    fitGraph(false);
+    sim.on("tick", render);
+    sim.on("end", () => fitGraph(true));
 
     setLoading(false);
   }
 
   return (
     <div style={embedded
-      ? { position:"relative",height:360,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif",borderRadius:4,overflow:"hidden",border:"1.5px solid rgba(139,111,71,0.18)",boxShadow:"0 20px 50px rgba(45,27,14,0.16)" }
+      ? { position:"relative",height:380,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif",borderRadius:4,overflow:"hidden",border:"1.5px solid rgba(139,111,71,0.18)",boxShadow:"0 20px 50px rgba(45,27,14,0.16)" }
       : { position:"fixed",inset:0,background:"radial-gradient(ellipse at 40% 40%, #1C0E04 0%, #0A0502 100%)",zIndex:500,display:"flex",flexDirection:"column",fontFamily:"'Jost',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
 
-      {/* Header */}
-      <div style={{ padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid rgba(139,111,71,0.2)",background:"rgba(10,5,2,0.7)",backdropFilter:"blur(10px)",flexShrink:0 }}>
+      <div style={{ padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid rgba(139,111,71,0.2)",background:"rgba(10,5,2,0.7)",backdropFilter:"blur(10px)",flexShrink:0, gap: 12 }}>
         <div>
           <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:300,color:"rgba(255,240,210,0.9)",letterSpacing:1 }}>
             Nexus <em style={{ fontStyle:"italic",color:"#D4A017" }}>Familiar</em>
@@ -221,20 +241,25 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
             {loading ? "Mapeando linajes..." : `${nodeCount} árbol${nodeCount!==1?"es":""} en el universo familiar`}
           </div>
         </div>
-        {onClose && !embedded && (
-          <button onClick={onClose}
-            style={{ padding:"7px 16px",background:"transparent",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:2,color:"rgba(212,160,23,0.7)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",letterSpacing:"1px",textTransform:"uppercase",transition:"all 0.2s" }}>
-            ← Volver
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={() => fitGraphRef.current(true)}
+            style={{ padding:"7px 12px",background:"rgba(212,160,23,0.08)",border:"1.5px solid rgba(212,160,23,0.25)",borderRadius:2,color:"rgba(212,160,23,0.75)",fontFamily:"'Jost',sans-serif",fontSize:10,cursor:"pointer",letterSpacing:"1px",textTransform:"uppercase" }}>
+            ⤢ Ver todo
           </button>
-        )}
-        {embedded && (
-          <div style={{fontSize:10,color:"rgba(212,160,23,0.45)",letterSpacing:"0.8px",textTransform:"uppercase"}}>
-            Vista general
-          </div>
-        )}
+          {onClose && !embedded && (
+            <button onClick={onClose}
+              style={{ padding:"7px 16px",background:"transparent",border:"1.5px solid rgba(212,160,23,0.3)",borderRadius:2,color:"rgba(212,160,23,0.7)",fontFamily:"'Jost',sans-serif",fontSize:11,cursor:"pointer",letterSpacing:"1px",textTransform:"uppercase",transition:"all 0.2s" }}>
+              ← Volver
+            </button>
+          )}
+          {embedded && (
+            <div style={{fontSize:10,color:"rgba(212,160,23,0.45)",letterSpacing:"0.8px",textTransform:"uppercase"}}>
+              Vista general
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Graph area */}
       <div ref={wrapRef} style={{ flex:1,position:"relative",overflow:"hidden" }}>
         {loading && (
           <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -247,7 +272,6 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
         <svg ref={svgRef} style={{ width:"100%",height:"100%",display:"block" }}/>
       </div>
 
-      {/* Footer legend */}
       <div style={{ padding:"8px 20px",background:"rgba(10,5,2,0.8)",borderTop:"1px solid rgba(139,111,71,0.15)",display:"flex",gap:20,alignItems:"center",flexShrink:0,flexWrap:"wrap" }}>
         <div style={{ display:"flex",gap:6,alignItems:"center" }}>
           <div style={{ width:12,height:12,borderRadius:"50%",background:"#5D3A1A",border:"2px solid #D4A017" }}/>
@@ -262,10 +286,9 @@ export default function NexusView({ currentTreeId, onNavigate, onClose, embedded
           <span style={{ fontSize:10,color:"rgba(212,160,23,0.4)" }}>Portal</span>
         </div>
         <span style={{ fontSize:9,color:"rgba(212,160,23,0.25)",marginLeft:"auto" }}>
-          {embedded ? "Arrastra nodos · clic para abrir árbol" : "Arrastra nodos · Pellizca para zoom · Clic para abrir árbol"}
+          {embedded ? "Arrastra nodos · clic para abrir árbol · Ver todo para encuadrar" : "Arrastra nodos · Pellizca para zoom · Clic para abrir árbol"}
         </span>
       </div>
     </div>
   );
 }
-

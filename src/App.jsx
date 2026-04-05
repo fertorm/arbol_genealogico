@@ -88,6 +88,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
   const [joinId,setJoinId]=useState("");
   const [joining,setJoining]=useState(false);
   const [err,setErr]=useState("");
+  const focusTreeId = recent[0]?.id || null;
   const handleJoin=async()=>{
     const raw=joinId.trim();if(!raw)return;
     const id=extractUUID(raw)||raw;
@@ -99,7 +100,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
   return(
     <div style={{width:"100vw",minHeight:"100vh",background:"radial-gradient(ellipse at 60% 20%,#EDE4D0,#F5F0E8 60%,#E8E0D0)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Jost',sans-serif",padding:"24px 16px"}}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"/>
-      <div style={{width:"100%",maxWidth:1120,display:"grid",gridTemplateColumns:"minmax(360px,1fr) minmax(420px,1fr)",gap:32,alignItems:"stretch"}}>
+      <div style={{width:"100%",maxWidth:1120,display:"grid",gridTemplateColumns:"minmax(380px, 520px) minmax(500px, 620px)",gap:40,alignItems:"center",justifyContent:"center"}}>
         <div style={{width:"100%",maxWidth:520,justifySelf:"center",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:560}}>
         <div style={{textAlign:"center",marginBottom:36}}>
           <div style={{fontSize:48,marginBottom:10}}>🌳</div>
@@ -158,7 +159,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
           )}
         </div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:12,minWidth:0}}>
+        <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0,maxWidth:620,justifySelf:"center",alignSelf:"center"}}>
           <div style={{padding:"4px 2px 0"}}>
             <div style={{fontSize:10,letterSpacing:"1.5px",textTransform:"uppercase",color:"#8B6F47",fontWeight:500,marginBottom:8}}>🌐 Nexus familiar</div>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,fontWeight:300,color:"#3D2B1F",lineHeight:1.1}}>
@@ -169,7 +170,7 @@ function HomeScreen({onOpen,onCreate,user,onSignIn,onSignOut}){
             </div>
           </div>
           <Suspense fallback={<div style={{height:360,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,252,245,0.65)",border:"1.5px solid rgba(139,111,71,0.18)",borderRadius:4,color:"rgba(93,58,26,0.45)",fontFamily:"'Cormorant Garamond',serif",fontSize:22}}>🌐 Cargando Nexus...</div>}>
-            <NexusView currentTreeId={null} onNavigate={(id)=>onOpen(id)} embedded />
+            <NexusView currentTreeId={focusTreeId} focusTreeId={focusTreeId} onNavigate={(id)=>onOpen(id)} embedded />
           </Suspense>
         </div>
       </div>
@@ -1571,4 +1572,7 @@ function Btn({children,onClick,primary,color,style={}}){
     </button>
   );
 }
+
+
+
 
